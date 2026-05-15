@@ -1,0 +1,12 @@
+.next
+node_modules
+dist
+.DS_Store
+roadmap-studio.db
+roadmap-studio.db-journal
+prisma/roadmap-studio.db
+prisma/roadmap-studio.db-journal
+.env
+.env.local
+build
+tsconfig.tsbuildinfo

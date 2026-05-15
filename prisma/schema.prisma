@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Area {
+  Product
+  Platform
+  Integrations
+  Security
+  UX
+  Other
+}
+
+enum RoadmapStatus {
+  Idea
+  Discovery
+  Planned
+  InProgress
+  Shipped
+  Parked
+}
+
+enum Confidence {
+  Low
+  Medium
+  High
+}
+
+enum Impact {
+  Low
+  Medium
+  High
+}
+
+enum Effort {
+  S
+  M
+  L
+  XL
+}
+
+model RoadmapItem {
+  id             String        @id @default(uuid())
+  title          String
+  description    String?
+  area           Area
+  theme          String?
+  quarter        String
+  startDate      DateTime?
+  endDate        DateTime?
+  status         RoadmapStatus
+  confidence     Confidence
+  impact         Impact
+  effort         Effort
+  owner          String?
+  tags           Json          @default("[]")
+  isPublic       Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  dependencies   Dependency[]  @relation("RoadmapItemDependenciesFrom")
+  dependentOn    Dependency[]  @relation("RoadmapItemDependenciesTo")
+}
+
+model Dependency {
+  fromId String
+  toId   String
+  from   RoadmapItem @relation("RoadmapItemDependenciesFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to     RoadmapItem @relation("RoadmapItemDependenciesTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@id([fromId, toId])
+}
+
+model RoadmapView {
+  id        String   @id @default(uuid())
+  name      String
+  filters   Json
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
