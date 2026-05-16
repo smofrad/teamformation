@@ -1,6 +1,6 @@
-# Conference Check-in Demo
+# Team Formation
 
-A mobile-first conference entrance app built with Next.js, React, TypeScript, Tailwind CSS, Firebase Firestore, and a browser QR scanner.
+A mobile-first team lineup and match planning app built with Next.js, React, TypeScript, Tailwind CSS, Prisma, and Firebase-backed parts from the original project.
 
 ## Features
 
@@ -112,8 +112,41 @@ EMAIL:anna@company.se
 ### Vercel
 
 1. Import the repo into Vercel.
-2. Add the environment variables from `.env.local`.
-3. Deploy.
+2. Create and connect a PostgreSQL database.
+3. Add the environment variables from `.env.local`.
+4. Deploy.
+
+### Recommended database setup
+
+For this project on Vercel, use Prisma Postgres or another PostgreSQL-compatible hosted database.
+
+Prisma's Vercel guide notes that connecting a Prisma Postgres database to a Vercel project will automatically set `DATABASE_URL` for the app, which is the cleanest path for Prisma deployments on Vercel.
+
+Suggested flow:
+
+1. In Vercel, open your project.
+2. Go to `Storage`.
+3. Create a `Prisma Postgres` database.
+4. Connect it to the project.
+5. Verify that `DATABASE_URL` appears under project environment variables.
+6. Redeploy the app.
+
+You still need to add:
+
+```env
+STAFF_ACCESS_PASSWORD=your-password
+```
+
+If you use the Firebase-backed parts of the app, also set:
+
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+```
 
 ### Firebase Hosting
 
