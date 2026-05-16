@@ -19,6 +19,7 @@ export type MatchPeriod = {
   label: string;
   lineup: MatchPlayerPosition[];
   bench: string[];
+  isCustomized: boolean;
 };
 
 export type MatchRecord = {
@@ -168,6 +169,7 @@ export function sanitizeMatch(match: MatchRecord, teamPlayers: TeamPlayer[]) {
       label: template.label,
       lineup: cappedLineup,
       bench: [...dedupedBench, ...overflowBenchIds.filter((playerId) => !dedupedBench.includes(playerId))],
+      isCustomized: typeof candidate?.isCustomized === "boolean" ? candidate.isCustomized : index === 0,
     };
   });
 

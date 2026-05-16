@@ -155,6 +155,7 @@ export function LineupBuilder() {
         ...period,
         lineup: [],
         bench: [],
+        isCustomized: period.id === "period-1",
       })),
       activePeriodId: "period-1",
       createdAt: new Date().toISOString(),
@@ -214,27 +215,22 @@ export function LineupBuilder() {
     if (!activeMatch || !activePeriod) return;
     if (activePeriod.bench.includes(playerId) || activePeriod.lineup.some((item) => item.playerId === playerId)) return;
 
-    updateActiveMatch((match) => ({
-      ...match,
-      periods: match.periods.map((period) =>
-        period.id === match.activePeriodId ? { ...period, bench: [...period.bench, playerId] } : period
-      ),
-    }));
+    updateActiveMatch((match) =>
+      updateActivePeriod(match, (period) => ({
+        ...period,
+        bench: [...period.bench, playerId],
+      }))
+    );
   }
 
   function removePlayerFromMatch(playerId: string) {
-    updateActiveMatch((match) => ({
-      ...match,
-      periods: match.periods.map((period) =>
-        period.id === match.activePeriodId
-          ? {
-              ...period,
-              lineup: period.lineup.filter((item) => item.playerId !== playerId),
-              bench: period.bench.filter((id) => id !== playerId),
-            }
-          : period
-      ),
-    }));
+    updateActiveMatch((match) =>
+      updateActivePeriod(match, (period) => ({
+        ...period,
+        lineup: period.lineup.filter((item) => item.playerId !== playerId),
+        bench: period.bench.filter((id) => id !== playerId),
+      }))
+    );
   }
 
   function updateMatchFormat(format: MatchFormat) {
@@ -825,16 +821,11 @@ function movePlayerToPitch(match: MatchRecord, playerId: string, x: number, y: n
   }
 
   return {
-    ...match,
-    periods: match.periods.map((period) =>
-      period.id === match.activePeriodId
-        ? {
-            ...period,
-            lineup: [...filteredLineup, { playerId, x, y }],
-            bench: period.bench.filter((id) => id !== playerId),
-          }
-        : period
-    ),
+    ...updateActivePeriod(match, (period) => ({
+      ...period,
+      lineup: [...filteredLineup, { playerId, x, y }],
+      bench: period.bench.filter((id) => id !== playerId),
+    })),
   };
 }
 
@@ -843,22 +834,61 @@ function movePlayerToBench(match: MatchRecord, playerId: string) {
   if (!activePeriod) return match;
   const isAlreadyBenched = activePeriod.bench.includes(playerId);
   return {
-    ...match,
-    periods: match.periods.map((period) =>
-      period.id === match.activePeriodId
-        ? {
-            ...period,
-            lineup: period.lineup.filter((item) => item.playerId !== playerId),
-            bench: isAlreadyBenched ? period.bench : [...period.bench, playerId],
-          }
-        : period
-    ),
+    ...updateActivePeriod(match, (period) => ({
+      ...period,
+      lineup: period.lineup.filter((item) => item.playerId !== playerId),
+      bench: isAlreadyBenched ? period.bench : [...period.bench, playerId],
+    })),
   };
 }
 
 function getActivePeriod(match: MatchRecord | null): MatchPeriod | null {
   if (!match) return null;
-  return match.periods.find((period) => period.id === match.activePeriodId) ?? match.periods[0] ?? null;
+  const periodIndex = match.periods.findIndex((period) => period.id === match.activePeriodId);
+  if (periodIndex === -1) return match.periods[0] ?? null;
+  return getEffectivePeriod(match.periods, periodIndex);
+}
+
+function getEffectivePeriod(periods: MatchPeriod[], periodIndex: number): MatchPeriod {
+  const current = periods[periodIndex];
+  if (!current) {
+    return {
+      id: "period-1",
+      label: "1st half",
+      lineup: [],
+      bench: [],
+      isCustomized: true,
+    };
+  }
+
+  if (current.isCustomized || periodIndex === 0) {
+    return current;
+  }
+
+  const inherited = getEffectivePeriod(periods, periodIndex - 1);
+  return {
+    ...current,
+    lineup: inherited.lineup.map((item) => ({ ...item })),
+    bench: [...inherited.bench],
+  };
+}
+
+function updateActivePeriod(match: MatchRecord, updater: (period: MatchPeriod) => MatchPeriod) {
+  const activeIndex = match.periods.findIndex((period) => period.id === match.activePeriodId);
+  if (activeIndex === -1) {
+    return match;
+  }
+
+  const effectivePeriod = getEffectivePeriod(match.periods, activeIndex);
+  const nextPeriod = {
+    ...updater(effectivePeriod),
+    isCustomized: true,
+  };
+
+  return {
+    ...match,
+    periods: match.periods.map((period, index) => (index === activeIndex ? nextPeriod : period)),
+  };
 }
 
 function formatMatchLabel(format: MatchFormat) {
