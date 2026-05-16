@@ -148,6 +148,16 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 ```
 
+## V2 foundation
+
+The repo now includes a Supabase-backed V2 foundation:
+
+- `/v2/login`
+- `/v2`
+- `supabase/v2-schema.sql`
+
+Use the SQL file in the Supabase SQL editor to create the V2 tables and policies.
+
 ### Firebase Hosting
 
 1. Build the app with `npm run build`.

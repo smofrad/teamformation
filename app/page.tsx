@@ -1,5 +1,5 @@
-import { LineupBuilder } from "@/components/lineup-builder";
+import { redirect } from "next/navigation";
 
 export default function HomePage() {
-  return <LineupBuilder />;
+  redirect("/v2");
 }
