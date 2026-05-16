@@ -6,6 +6,7 @@
     "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
+    "build:vercel": "prisma db push && next build",
     "start": "next start",
     "lint": "next lint",
     "demo:payloads": "tsx scripts/generate-qr-payloads.ts"
