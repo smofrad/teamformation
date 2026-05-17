@@ -156,7 +156,6 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
       return;
     }
 
-    setShowControlsSheet(false);
     await refresh();
   }
 
@@ -177,7 +176,6 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
       return;
     }
 
-    setShowControlsSheet(false);
     await refresh();
   }
 
