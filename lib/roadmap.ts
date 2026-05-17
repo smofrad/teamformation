@@ -30,6 +30,15 @@ function optionalDate(value?: string) {
   return value ? new Date(value) : null;
 }
 
+function isMissingRoadmapSchema(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2021" &&
+    typeof error.message === "string" &&
+    (error.message.includes("RoadmapItem") || error.message.includes("RoadmapView") || error.message.includes("Dependency"))
+  );
+}
+
 type RoadmapItemWithRelations = Prisma.RoadmapItemGetPayload<{
   include: {
     dependencies: {
@@ -80,65 +89,97 @@ export const defaultFilters: RoadmapFilters = {
 };
 
 export async function getRoadmapItems() {
-  const items = await prisma.roadmapItem.findMany({
-    include: {
-      dependencies: {
-        select: {
-          toId: true,
+  try {
+    const items = await prisma.roadmapItem.findMany({
+      include: {
+        dependencies: {
+          select: {
+            toId: true,
+          },
+        },
+        dependentOn: {
+          select: {
+            fromId: true,
+          },
         },
       },
-      dependentOn: {
-        select: {
-          fromId: true,
-        },
-      },
-    },
-    orderBy: [{ quarter: "asc" }, { updatedAt: "desc" }],
-  });
+      orderBy: [{ quarter: "asc" }, { updatedAt: "desc" }],
+    });
 
-  return items.map(serializeItem);
+    return items.map(serializeItem);
+  } catch (error) {
+    if (isMissingRoadmapSchema(error)) {
+      return [];
+    }
+
+    throw error;
+  }
 }
 
 export async function getRoadmapMetrics(): Promise<RoadmapMetrics> {
-  const [totalItems, publicItems, inFlight, shippedThisQuarter] = await Promise.all([
-    prisma.roadmapItem.count(),
-    prisma.roadmapItem.count({ where: { isPublic: true } }),
-    prisma.roadmapItem.count({ where: { status: { in: ["Discovery", "Planned", "InProgress"] } } }),
-    prisma.roadmapItem.count({
-      where: {
-        status: "Shipped",
-        quarter: "2026-Q1",
-      },
-    }),
-  ]);
+  try {
+    const [totalItems, publicItems, inFlight, shippedThisQuarter] = await Promise.all([
+      prisma.roadmapItem.count(),
+      prisma.roadmapItem.count({ where: { isPublic: true } }),
+      prisma.roadmapItem.count({ where: { status: { in: ["Discovery", "Planned", "InProgress"] } } }),
+      prisma.roadmapItem.count({
+        where: {
+          status: "Shipped",
+          quarter: "2026-Q1",
+        },
+      }),
+    ]);
 
-  return { totalItems, publicItems, inFlight, shippedThisQuarter };
+    return { totalItems, publicItems, inFlight, shippedThisQuarter };
+  } catch (error) {
+    if (isMissingRoadmapSchema(error)) {
+      return { totalItems: 0, publicItems: 0, inFlight: 0, shippedThisQuarter: 0 };
+    }
+
+    throw error;
+  }
 }
 
 export async function getPublicRoadmapItems() {
-  const items = await prisma.roadmapItem.findMany({
-    where: { isPublic: true },
-    include: {
-      dependencies: { select: { toId: true } },
-      dependentOn: { select: { fromId: true } },
-    },
-    orderBy: [{ quarter: "asc" }, { area: "asc" }],
-  });
+  try {
+    const items = await prisma.roadmapItem.findMany({
+      where: { isPublic: true },
+      include: {
+        dependencies: { select: { toId: true } },
+        dependentOn: { select: { fromId: true } },
+      },
+      orderBy: [{ quarter: "asc" }, { area: "asc" }],
+    });
 
-  return items.map(serializeItem);
+    return items.map(serializeItem);
+  } catch (error) {
+    if (isMissingRoadmapSchema(error)) {
+      return [];
+    }
+
+    throw error;
+  }
 }
 
 export async function getDbViews(): Promise<RoadmapViewRecord[]> {
-  const views = await prisma.roadmapView.findMany({
-    orderBy: { updatedAt: "desc" },
-  });
+  try {
+    const views = await prisma.roadmapView.findMany({
+      orderBy: { updatedAt: "desc" },
+    });
 
-  return views.map((view) => ({
-    ...view,
-    createdAt: view.createdAt.toISOString(),
-    updatedAt: view.updatedAt.toISOString(),
-    filters: typeof view.filters === "object" && view.filters ? (view.filters as Record<string, unknown>) : {},
-  }));
+    return views.map((view) => ({
+      ...view,
+      createdAt: view.createdAt.toISOString(),
+      updatedAt: view.updatedAt.toISOString(),
+      filters: typeof view.filters === "object" && view.filters ? (view.filters as Record<string, unknown>) : {},
+    }));
+  } catch (error) {
+    if (isMissingRoadmapSchema(error)) {
+      return [];
+    }
+
+    throw error;
+  }
 }
 
 export async function createRoadmapItem(input: RoadmapItemInput) {
