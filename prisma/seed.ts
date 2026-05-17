@@ -178,7 +178,9 @@ async function main() {
   await prisma.$disconnect();
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1]?.includes("prisma/seed")) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
