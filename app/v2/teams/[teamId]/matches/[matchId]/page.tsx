@@ -24,8 +24,8 @@ export default async function V2MatchPage({
   }
 
   return (
-    <main className="min-h-screen px-3 py-3 sm:px-4 sm:py-4">
-      <div className="mx-auto flex max-w-5xl flex-col gap-3">
+    <main className="h-[100dvh] overflow-hidden px-2 py-2 sm:px-3 sm:py-3">
+      <div className="mx-auto flex h-full max-w-5xl flex-col gap-2">
         <div className="flex items-center justify-between">
           <Button asChild size="sm" variant="outline">
             <Link href={`/v2/teams/${teamId}`}>

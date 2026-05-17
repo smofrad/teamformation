@@ -6,6 +6,7 @@ export type V2TeamSummary = {
   createdAt: string;
   playerCount: number;
   matchCount: number;
+  latestMatchId: string | null;
 };
 
 export type V2Player = {
@@ -79,7 +80,11 @@ export async function getV2TeamsForCurrentUser(): Promise<V2TeamSummary[]> {
         name,
         created_at,
         players(count),
-        matches(count)
+        matches(
+          id,
+          match_date,
+          created_at
+        )
       `
     )
     .order("name", { ascending: true });
@@ -88,13 +93,20 @@ export async function getV2TeamsForCurrentUser(): Promise<V2TeamSummary[]> {
     throw new Error(error.message);
   }
 
-  return (data ?? []).map((team) => ({
-    id: team.id,
-    name: team.name,
-    createdAt: team.created_at,
-    playerCount: team.players?.[0]?.count ?? 0,
-    matchCount: team.matches?.[0]?.count ?? 0,
-  }));
+  return (data ?? []).map((team) => {
+    const sortedMatches = [...(team.matches ?? [])].sort(
+      (a, b) => Number(new Date(b.match_date ?? b.created_at)) - Number(new Date(a.match_date ?? a.created_at))
+    );
+
+    return {
+      id: team.id,
+      name: team.name,
+      createdAt: team.created_at,
+      playerCount: team.players?.[0]?.count ?? 0,
+      matchCount: team.matches?.length ?? 0,
+      latestMatchId: sortedMatches[0]?.id ?? null,
+    };
+  });
 }
 
 export async function getV2TeamDetail(teamId: string): Promise<V2TeamDetail | null> {

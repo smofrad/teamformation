@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Database, Users } from "lucide-react";
 
 import { requireSupabaseUser } from "@/lib/supabase/auth";
@@ -8,6 +9,15 @@ export default async function V2HomePage() {
   const user = await requireSupabaseUser();
   const teams = await getV2TeamsForCurrentUser();
 
+  if (teams.length === 1) {
+    const onlyTeam = teams[0];
+    if (onlyTeam.latestMatchId) {
+      redirect(`/v2/teams/${onlyTeam.id}/matches/${onlyTeam.latestMatchId}`);
+    }
+
+    redirect(`/v2/teams/${onlyTeam.id}`);
+  }
+
   return (
     <main className="min-h-screen px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-4xl space-y-4">
@@ -15,13 +25,13 @@ export default async function V2HomePage() {
           <p className="text-xs uppercase tracking-[0.3em] text-emerald-700">Team Formation</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Your shared team workspace</h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            Signed in as <strong>{user.email}</strong>. Choose a team to work with the shared squad, matches and pitch plans.
+            Signed in as <strong>{user.email}</strong>. Choose a team and go straight into building formations.
           </p>
         </section>
 
         <section className="surface p-6">
           <h2 className="text-xl font-semibold">Your teams</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Each team has its own players, matches, periods and presentation views.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Each team opens into the formation workflow first. Squad management is kept separate.</p>
 
           {teams.length === 0 ? (
             <div className="mt-4 rounded-3xl border border-dashed border-border bg-secondary/40 p-5 text-sm text-muted-foreground">
@@ -52,9 +62,9 @@ export default async function V2HomePage() {
                   <div className="mt-4">
                     <Link
                       className="inline-flex rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-secondary"
-                      href={`/v2/teams/${team.id}`}
+                      href={team.latestMatchId ? `/v2/teams/${team.id}/matches/${team.latestMatchId}` : `/v2/teams/${team.id}`}
                     >
-                      Open team
+                      {team.latestMatchId ? "Open latest match" : "Create formation"}
                     </Link>
                   </div>
                 </article>
