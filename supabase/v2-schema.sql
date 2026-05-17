@@ -105,6 +105,21 @@ begin
 end;
 $$;
 
+create or replace function public.is_team_member(target_team_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.team_members tm
+    where tm.team_id = target_team_id
+      and tm.user_id = auth.uid()
+  );
+$$;
+
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
@@ -134,64 +149,34 @@ create policy "teams readable by members"
 on public.teams for select
 to authenticated
 using (
-  exists (
-    select 1
-    from public.team_members tm
-    where tm.team_id = teams.id
-      and tm.user_id = auth.uid()
-  )
+  public.is_team_member(teams.id)
 );
 
 create policy "team_members readable by members"
 on public.team_members for select
 to authenticated
 using (
-  exists (
-    select 1
-    from public.team_members tm
-    where tm.team_id = team_members.team_id
-      and tm.user_id = auth.uid()
-  )
+  public.is_team_member(team_members.team_id)
 );
 
 create policy "players manageable by team members"
 on public.players for all
 to authenticated
 using (
-  exists (
-    select 1
-    from public.team_members tm
-    where tm.team_id = players.team_id
-      and tm.user_id = auth.uid()
-  )
+  public.is_team_member(players.team_id)
 )
 with check (
-  exists (
-    select 1
-    from public.team_members tm
-    where tm.team_id = players.team_id
-      and tm.user_id = auth.uid()
-  )
+  public.is_team_member(players.team_id)
 );
 
 create policy "matches manageable by team members"
 on public.matches for all
 to authenticated
 using (
-  exists (
-    select 1
-    from public.team_members tm
-    where tm.team_id = matches.team_id
-      and tm.user_id = auth.uid()
-  )
+  public.is_team_member(matches.team_id)
 )
 with check (
-  exists (
-    select 1
-    from public.team_members tm
-    where tm.team_id = matches.team_id
-      and tm.user_id = auth.uid()
-  )
+  public.is_team_member(matches.team_id)
 );
 
 create policy "match_periods manageable by team members"
@@ -201,18 +186,16 @@ using (
   exists (
     select 1
     from public.matches m
-    join public.team_members tm on tm.team_id = m.team_id
     where m.id = match_periods.match_id
-      and tm.user_id = auth.uid()
+      and public.is_team_member(m.team_id)
   )
 )
 with check (
   exists (
     select 1
     from public.matches m
-    join public.team_members tm on tm.team_id = m.team_id
     where m.id = match_periods.match_id
-      and tm.user_id = auth.uid()
+      and public.is_team_member(m.team_id)
   )
 );
 
@@ -224,9 +207,8 @@ using (
     select 1
     from public.match_periods mp
     join public.matches m on m.id = mp.match_id
-    join public.team_members tm on tm.team_id = m.team_id
     where mp.id = period_players.match_period_id
-      and tm.user_id = auth.uid()
+      and public.is_team_member(m.team_id)
   )
 )
 with check (
@@ -234,9 +216,8 @@ with check (
     select 1
     from public.match_periods mp
     join public.matches m on m.id = mp.match_id
-    join public.team_members tm on tm.team_id = m.team_id
     where mp.id = period_players.match_period_id
-      and tm.user_id = auth.uid()
+      and public.is_team_member(m.team_id)
   )
 );
 
@@ -244,22 +225,12 @@ create policy "match_history readable by team members"
 on public.match_history for select
 to authenticated
 using (
-  exists (
-    select 1
-    from public.team_members tm
-    where tm.team_id = match_history.team_id
-      and tm.user_id = auth.uid()
-  )
+  public.is_team_member(match_history.team_id)
 );
 
 create policy "match_history writable by team members"
 on public.match_history for insert
 to authenticated
 with check (
-  exists (
-    select 1
-    from public.team_members tm
-    where tm.team_id = match_history.team_id
-      and tm.user_id = auth.uid()
-  )
+  public.is_team_member(match_history.team_id)
 );
