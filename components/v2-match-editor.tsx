@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   DndContext,
   DragEndEvent,
+  DragMoveEvent,
   DragOverlay,
   DragStartEvent,
   PointerSensor,
@@ -66,11 +67,28 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function getCoordinatesFromRect({
+  rect,
+  translatedRect,
+}: {
+  rect: DOMRect;
+  translatedRect: { left: number; top: number; width: number; height: number };
+}) {
+  const tokenCenterX = translatedRect.left + translatedRect.width / 2;
+  const tokenCenterY = translatedRect.top + translatedRect.height / 2;
+
+  return {
+    x: clamp(((tokenCenterX - rect.left) / rect.width) * 100, 6, 94),
+    y: clamp(((tokenCenterY - rect.top) / rect.height) * 100, 8, 92),
+  };
+}
+
 export function V2MatchEditor({ match, initialPresentationMode = false }: { match: V2MatchDetail; initialPresentationMode?: boolean }) {
   const router = useRouter();
   const pitchRef = useRef<HTMLDivElement | null>(null);
   const [activePeriodNumber, setActivePeriodNumber] = useState(match.activePeriodNumber);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [dragPreview, setDragPreview] = useState<{ playerId: string; x: number; y: number } | null>(null);
   const [presentationMode, setPresentationMode] = useState(initialPresentationMode);
   const [showMatchInfo, setShowMatchInfo] = useState(false);
   const [showControlsSheet, setShowControlsSheet] = useState(false);
@@ -182,15 +200,33 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   function handleDragStart(event: DragStartEvent) {
     if (presentationMode) return;
     setActiveDragId(String(event.active.id));
+    setDragPreview(null);
+  }
+
+  function handleDragMove(event: DragMoveEvent) {
+    if (presentationMode) return;
+
+    const playerId = String(event.active.id);
+    const rect = pitchRef.current?.getBoundingClientRect();
+    const translatedRect = event.active.rect.current.translated;
+
+    if (!rect || !translatedRect) return;
+
+    setDragPreview({
+      playerId,
+      ...getCoordinatesFromRect({ rect, translatedRect }),
+    });
   }
 
   async function handleDragEnd(event: DragEndEvent) {
     if (presentationMode) {
       setActiveDragId(null);
+      setDragPreview(null);
       return;
     }
 
     setActiveDragId(null);
+    setDragPreview(null);
     const playerId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : null;
 
@@ -204,6 +240,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
     if (overId === "pitch-zone") {
       const rect = pitchRef.current?.getBoundingClientRect();
       const translatedRect = event.active.rect.current.translated;
+      const currentLineupItem = lineupPlayers.find((item) => item.playerId === playerId);
 
       if (!rect || !translatedRect) {
         const fallback = getPitchCoordinates(lineupPlayers.findIndex((item) => item.playerId === playerId) === -1 ? lineupPlayers.length : 0);
@@ -211,16 +248,19 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
         return;
       }
 
-      const tokenCenterX = translatedRect.left + translatedRect.width / 2;
-      const tokenCenterY = translatedRect.top + translatedRect.height / 2;
-      const x = clamp(((tokenCenterX - rect.left) / rect.width) * 100, 6, 94);
-      const y = clamp(((tokenCenterY - rect.top) / rect.height) * 100, 8, 92);
-      await savePlayer(playerId, "pitch", { x, y });
+      if (currentLineupItem) {
+        const preciseX = clamp((currentLineupItem.x ?? 50) + (event.delta.x / rect.width) * 100, 6, 94);
+        const preciseY = clamp((currentLineupItem.y ?? 50) + (event.delta.y / rect.height) * 100, 8, 92);
+        await savePlayer(playerId, "pitch", { x: preciseX, y: preciseY });
+        return;
+      }
+
+      await savePlayer(playerId, "pitch", getCoordinatesFromRect({ rect, translatedRect }));
     }
   }
 
   return (
-    <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragMove={handleDragMove} onDragStart={handleDragStart}>
       <section className="surface flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -284,7 +324,12 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
         {error ? <div className="mt-2 rounded-2xl border px-4 py-3 text-sm status-error">{error}</div> : null}
 
         <div className="mt-2 flex min-h-0 flex-1 flex-col gap-2">
-          <PitchZone lineupPlayers={lineupPlayers} pitchRef={pitchRef} presentationMode={presentationMode} />
+          <PitchZone
+            dragPreview={dragPreview ? { ...dragPreview, player: playersById.get(dragPreview.playerId) ?? null } : null}
+            lineupPlayers={lineupPlayers}
+            pitchRef={pitchRef}
+            presentationMode={presentationMode}
+          />
 
           {!presentationMode ? (
             <>
@@ -500,10 +545,12 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
 }
 
 function PitchZone({
+  dragPreview,
   lineupPlayers,
   pitchRef,
   presentationMode,
 }: {
+  dragPreview: { playerId: string; x: number; y: number; player: V2Player | null } | null;
   lineupPlayers: Array<V2PeriodPlayer & { player: V2Player }>;
   pitchRef: React.RefObject<HTMLDivElement | null>;
   presentationMode: boolean;
@@ -541,6 +588,19 @@ function PitchZone({
       {lineupPlayers.map((item) =>
         presentationMode ? <StaticPitchPlayer item={item} key={item.playerId} /> : <DraggablePitchPlayer item={item} key={item.playerId} />
       )}
+
+      {dragPreview?.player ? (
+        <div
+          className="pointer-events-none absolute z-40 opacity-80"
+          style={{
+            left: `${dragPreview.x}%`,
+            top: `${dragPreview.y}%`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <PlayerToken player={dragPreview.player} variant="overlay" />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -584,7 +644,7 @@ function DraggablePitchPlayer({ item }: { item: V2PeriodPlayer & { player: V2Pla
     <button
       {...attributes}
       {...listeners}
-      className={cn("absolute touch-none", isDragging && "z-50 opacity-0")}
+      className={cn("absolute touch-none select-none cursor-grab active:cursor-grabbing", isDragging && "z-50 opacity-0")}
       ref={setNodeRef}
       style={{
         left: `${item.x ?? 50}%`,
@@ -620,7 +680,7 @@ function DraggableBenchPlayer({ player }: { player: V2Player }) {
     <button
       {...attributes}
       {...listeners}
-      className={cn("touch-none", isDragging && "opacity-40")}
+      className={cn("touch-none select-none cursor-grab active:cursor-grabbing", isDragging && "opacity-40")}
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform) }}
       type="button"
