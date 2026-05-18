@@ -8,7 +8,6 @@ import {
   DragOverlay,
   DragStartEvent,
   PointerSensor,
-  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -93,7 +92,13 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const [showControlsSheet, setShowControlsSheet] = useState(false);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
-  const sensors = useSensors(useSensor(PointerSensor), useSensor(TouchSensor));
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 4,
+      },
+    })
+  );
 
   const activePeriod = useMemo(
     () => getEffectivePeriod(match.periods, activePeriodNumber),
