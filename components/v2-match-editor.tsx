@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   DndContext,
   DragEndEvent,
-  DragMoveEvent,
   DragOverlay,
   DragStartEvent,
   PointerSensor,
@@ -88,7 +87,6 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const pitchRef = useRef<HTMLDivElement | null>(null);
   const [activePeriodNumber, setActivePeriodNumber] = useState(match.activePeriodNumber);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
-  const [dragPreview, setDragPreview] = useState<{ playerId: string; x: number; y: number } | null>(null);
   const [presentationMode, setPresentationMode] = useState(initialPresentationMode);
   const [showMatchInfo, setShowMatchInfo] = useState(false);
   const [showControlsSheet, setShowControlsSheet] = useState(false);
@@ -125,6 +123,8 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const selectedIds = useMemo(() => new Set(activePeriod?.players.map((item) => item.playerId) ?? []), [activePeriod]);
   const availablePlayers = useMemo(() => match.players.filter((player) => !selectedIds.has(player.id)), [match.players, selectedIds]);
   const activeDragPlayer = useMemo(() => (activeDragId ? playersById.get(activeDragId) ?? null : null), [activeDragId, playersById]);
+  const lineupPlayerIds = useMemo(() => new Set(lineupPlayers.map((item) => item.playerId)), [lineupPlayers]);
+  const benchPlayerIds = useMemo(() => new Set(benchPlayers.map((item) => item.id)), [benchPlayers]);
 
   async function refresh() {
     startTransition(() => {
@@ -200,44 +200,29 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   function handleDragStart(event: DragStartEvent) {
     if (presentationMode) return;
     setActiveDragId(String(event.active.id));
-    setDragPreview(null);
-  }
-
-  function handleDragMove(event: DragMoveEvent) {
-    if (presentationMode) return;
-
-    const playerId = String(event.active.id);
-    const rect = pitchRef.current?.getBoundingClientRect();
-    const translatedRect = event.active.rect.current.translated;
-
-    if (!rect || !translatedRect) return;
-
-    setDragPreview({
-      playerId,
-      ...getCoordinatesFromRect({ rect, translatedRect }),
-    });
   }
 
   async function handleDragEnd(event: DragEndEvent) {
     if (presentationMode) {
       setActiveDragId(null);
-      setDragPreview(null);
       return;
     }
 
     setActiveDragId(null);
-    setDragPreview(null);
     const playerId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : null;
 
     if (!overId) return;
 
-    if (overId === "bench-zone") {
+    const overBench = overId === "bench-zone" || benchPlayerIds.has(overId);
+    const overPitch = overId === "pitch-zone" || lineupPlayerIds.has(overId);
+
+    if (overBench) {
       await savePlayer(playerId, "bench");
       return;
     }
 
-    if (overId === "pitch-zone") {
+    if (overPitch) {
       const rect = pitchRef.current?.getBoundingClientRect();
       const translatedRect = event.active.rect.current.translated;
       const currentLineupItem = lineupPlayers.find((item) => item.playerId === playerId);
@@ -260,7 +245,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   }
 
   return (
-    <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragMove={handleDragMove} onDragStart={handleDragStart}>
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
       <section className="surface flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -324,12 +309,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
         {error ? <div className="mt-2 rounded-2xl border px-4 py-3 text-sm status-error">{error}</div> : null}
 
         <div className="mt-2 flex min-h-0 flex-1 flex-col gap-2">
-          <PitchZone
-            dragPreview={dragPreview ? { ...dragPreview, player: playersById.get(dragPreview.playerId) ?? null } : null}
-            lineupPlayers={lineupPlayers}
-            pitchRef={pitchRef}
-            presentationMode={presentationMode}
-          />
+          <PitchZone lineupPlayers={lineupPlayers} pitchRef={pitchRef} presentationMode={presentationMode} />
 
           {!presentationMode ? (
             <>
@@ -545,12 +525,10 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
 }
 
 function PitchZone({
-  dragPreview,
   lineupPlayers,
   pitchRef,
   presentationMode,
 }: {
-  dragPreview: { playerId: string; x: number; y: number; player: V2Player | null } | null;
   lineupPlayers: Array<V2PeriodPlayer & { player: V2Player }>;
   pitchRef: React.RefObject<HTMLDivElement | null>;
   presentationMode: boolean;
@@ -588,19 +566,6 @@ function PitchZone({
       {lineupPlayers.map((item) =>
         presentationMode ? <StaticPitchPlayer item={item} key={item.playerId} /> : <DraggablePitchPlayer item={item} key={item.playerId} />
       )}
-
-      {dragPreview?.player ? (
-        <div
-          className="pointer-events-none absolute z-40 opacity-80"
-          style={{
-            left: `${dragPreview.x}%`,
-            top: `${dragPreview.y}%`,
-            transform: "translate(-50%, -50%)",
-          }}
-        >
-          <PlayerToken player={dragPreview.player} variant="overlay" />
-        </div>
-      ) : null}
     </div>
   );
 }
