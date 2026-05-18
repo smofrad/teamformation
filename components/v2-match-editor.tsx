@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -86,6 +86,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const pitchRef = useRef<HTMLDivElement | null>(null);
   const benchRef = useRef<HTMLDivElement | null>(null);
   const [activePeriodNumber, setActivePeriodNumber] = useState(match.activePeriodNumber);
+  const [localPeriods, setLocalPeriods] = useState(match.periods);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [presentationMode, setPresentationMode] = useState(initialPresentationMode);
   const [showMatchInfo, setShowMatchInfo] = useState(false);
@@ -100,9 +101,14 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
     })
   );
 
+  useEffect(() => {
+    setLocalPeriods(match.periods);
+    setActivePeriodNumber(match.activePeriodNumber);
+  }, [match.activePeriodNumber, match.id, match.periods]);
+
   const activePeriod = useMemo(
-    () => getEffectivePeriod(match.periods, activePeriodNumber),
-    [activePeriodNumber, match.periods]
+    () => getEffectivePeriod(localPeriods, activePeriodNumber),
+    [activePeriodNumber, localPeriods]
   );
 
   const playersById = useMemo(() => new Map(match.players.map((player) => [player.id, player])), [match.players]);
@@ -132,9 +138,19 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const lineupPlayerIds = useMemo(() => new Set(lineupPlayers.map((item) => item.playerId)), [lineupPlayers]);
   const benchPlayerIds = useMemo(() => new Set(benchPlayers.map((item) => item.id)), [benchPlayers]);
 
-  async function refresh() {
-    startTransition(() => {
-      router.refresh();
+  function updateLocalPeriod(periodNumber: number, updater: (period: EffectivePeriod) => EffectivePeriod) {
+    setLocalPeriods((currentPeriods) => {
+      const effectivePeriod = getEffectivePeriod(currentPeriods, periodNumber);
+      if (!effectivePeriod) return currentPeriods;
+
+      return currentPeriods.map((period) =>
+        period.periodNumber === periodNumber
+          ? {
+              ...updater(effectivePeriod),
+              isCustomized: true,
+            }
+          : period
+      );
     });
   }
 
@@ -151,14 +167,36 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
     if (!response.ok) {
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
       setError(data?.error ?? "Unable to switch period.");
+      startTransition(() => {
+        router.refresh();
+      });
       return;
     }
-
-    await refresh();
   }
 
   async function savePlayer(playerId: string, zone: "pitch" | "bench", coordinates?: { x: number; y: number }) {
     setError("");
+    updateLocalPeriod(activePeriodNumber, (period) => {
+      const nextPlayers = period.players.filter((item) => item.playerId !== playerId);
+      const pitchCount = nextPlayers.filter((item) => item.zone === "pitch").length;
+
+      if (zone === "pitch" && pitchCount >= match.format) {
+        return period;
+      }
+
+      return {
+        ...period,
+        players: [
+          ...nextPlayers,
+          {
+            playerId,
+            zone,
+            x: zone === "pitch" ? coordinates?.x ?? 50 : null,
+            y: zone === "pitch" ? coordinates?.y ?? 72 : null,
+          },
+        ],
+      };
+    });
 
     const response = await fetch(
       `/api/v2/teams/${match.teamId}/matches/${match.id}/periods/${activePeriodNumber}/players`,
@@ -177,14 +215,20 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
     if (!response.ok) {
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
       setError(data?.error ?? "Unable to update player.");
+      startTransition(() => {
+        router.refresh();
+      });
       return;
     }
-
-    await refresh();
   }
 
   async function removePlayer(playerId: string) {
     setError("");
+    updateLocalPeriod(activePeriodNumber, (period) => ({
+      ...period,
+      players: period.players.filter((item) => item.playerId !== playerId),
+    }));
+
     const response = await fetch(
       `/api/v2/teams/${match.teamId}/matches/${match.id}/periods/${activePeriodNumber}/players`,
       {
@@ -197,10 +241,11 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
     if (!response.ok) {
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
       setError(data?.error ?? "Unable to remove player.");
+      startTransition(() => {
+        router.refresh();
+      });
       return;
     }
-
-    await refresh();
   }
 
   function handleDragStart(event: DragStartEvent) {
