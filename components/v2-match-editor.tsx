@@ -85,6 +85,7 @@ function getCoordinatesFromRect({
 export function V2MatchEditor({ match, initialPresentationMode = false }: { match: V2MatchDetail; initialPresentationMode?: boolean }) {
   const router = useRouter();
   const pitchRef = useRef<HTMLDivElement | null>(null);
+  const benchRef = useRef<HTMLDivElement | null>(null);
   const [activePeriodNumber, setActivePeriodNumber] = useState(match.activePeriodNumber);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [presentationMode, setPresentationMode] = useState(initialPresentationMode);
@@ -211,20 +212,41 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
     setActiveDragId(null);
     const playerId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : null;
+    const translatedRect = event.active.rect.current.translated;
+    const pitchRect = pitchRef.current?.getBoundingClientRect();
+    const benchRect = benchRef.current?.getBoundingClientRect();
 
-    if (!overId) return;
+    const centerX = translatedRect ? translatedRect.left + translatedRect.width / 2 : null;
+    const centerY = translatedRect ? translatedRect.top + translatedRect.height / 2 : null;
 
-    const overBench = overId === "bench-zone" || benchPlayerIds.has(overId);
-    const overPitch = overId === "pitch-zone" || lineupPlayerIds.has(overId);
+    const droppedInPitch =
+      centerX !== null &&
+      centerY !== null &&
+      pitchRect &&
+      centerX >= pitchRect.left &&
+      centerX <= pitchRect.right &&
+      centerY >= pitchRect.top &&
+      centerY <= pitchRect.bottom;
 
-    if (overBench) {
+    const droppedInBench =
+      centerX !== null &&
+      centerY !== null &&
+      benchRect &&
+      centerX >= benchRect.left &&
+      centerX <= benchRect.right &&
+      centerY >= benchRect.top &&
+      centerY <= benchRect.bottom;
+
+    const overBench = droppedInBench || overId === "bench-zone" || benchPlayerIds.has(overId ?? "");
+    const overPitch = droppedInPitch || overId === "pitch-zone" || lineupPlayerIds.has(overId ?? "");
+
+    if (overBench && !overPitch) {
       await savePlayer(playerId, "bench");
       return;
     }
 
     if (overPitch) {
-      const rect = pitchRef.current?.getBoundingClientRect();
-      const translatedRect = event.active.rect.current.translated;
+      const rect = pitchRect;
       const currentLineupItem = lineupPlayers.find((item) => item.playerId === playerId);
 
       if (!rect || !translatedRect) {
@@ -335,7 +357,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
               </div>
 
               <div className="hidden sm:block">
-                <BenchZone benchPlayers={benchPlayers} />
+                <BenchZone benchPlayers={benchPlayers} benchRef={benchRef} />
               </div>
             </>
           ) : null}
@@ -440,7 +462,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
               )}
             >
               <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-slate-300" />
-              <BenchZone benchPlayers={benchPlayers} />
+              <BenchZone benchPlayers={benchPlayers} benchRef={benchRef} />
               <div className="mt-2 grid gap-2">
                 <section className="rounded-[24px] bg-emerald-50 p-3">
                   <div className="flex items-center gap-2">
@@ -570,7 +592,13 @@ function PitchZone({
   );
 }
 
-function BenchZone({ benchPlayers }: { benchPlayers: V2Player[] }) {
+function BenchZone({
+  benchPlayers,
+  benchRef,
+}: {
+  benchPlayers: V2Player[];
+  benchRef: React.RefObject<HTMLDivElement | null>;
+}) {
   const benchDrop = useDroppable({ id: "bench-zone" });
 
   return (
@@ -579,7 +607,10 @@ function BenchZone({ benchPlayers }: { benchPlayers: V2Player[] }) {
         "rounded-[24px] border border-dashed border-border bg-[rgba(255,255,255,0.72)] p-3",
         benchDrop.isOver && "border-emerald-400 bg-emerald-50/90"
       )}
-      ref={benchDrop.setNodeRef}
+      ref={(node) => {
+        benchDrop.setNodeRef(node);
+        benchRef.current = node;
+      }}
     >
       <div className="flex items-center justify-between gap-3">
         <div>
