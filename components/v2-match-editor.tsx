@@ -14,7 +14,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarDays, ChevronUp, Eye, EyeOff, History, Info, Plus, X } from "lucide-react";
+import { CalendarDays, ChevronUp, Eye, EyeOff, Info, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,6 +103,8 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const [goalTeamSide, setGoalTeamSide] = useState<"home" | "away">("home");
   const [goalScorerName, setGoalScorerName] = useState("");
   const [goalMinute, setGoalMinute] = useState("");
+  const [manualHomeScore, setManualHomeScore] = useState(match.manualHomeScore?.toString() ?? "");
+  const [manualAwayScore, setManualAwayScore] = useState(match.manualAwayScore?.toString() ?? "");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const sensors = useSensors(
@@ -122,6 +124,8 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
     setFormat(match.format);
     setPeriodCount(match.periodCount);
     setPeriodLengthMinutes(match.periodLengthMinutes);
+    setManualHomeScore(match.manualHomeScore?.toString() ?? "");
+    setManualAwayScore(match.manualAwayScore?.toString() ?? "");
   }, [match.activePeriodNumber, match.id, match.periods]);
 
   const activePeriod = useMemo(
@@ -157,6 +161,12 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const benchPlayerIds = useMemo(() => new Set(benchPlayers.map((item) => item.id)), [benchPlayers]);
   const homeGoals = useMemo(() => match.goals.filter((goal) => goal.teamSide === "home").length, [match.goals]);
   const awayGoals = useMemo(() => match.goals.filter((goal) => goal.teamSide === "away").length, [match.goals]);
+  const effectiveHomeScore = match.manualHomeScore ?? homeGoals;
+  const effectiveAwayScore = match.manualAwayScore ?? awayGoals;
+  const teamScorerOptions = useMemo(
+    () => match.players.map((player) => ({ id: player.id, label: `#${player.shirtNumber} ${player.name}`, name: player.name })),
+    [match.players]
+  );
 
   function updateLocalPeriod(periodNumber: number, updater: (period: EffectivePeriod) => EffectivePeriod) {
     setLocalPeriods((currentPeriods) => {
@@ -241,7 +251,6 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
       return;
     }
 
-    setShowSquadSheet(false);
   }
 
   function moveBenchPlayerToPitch(playerId: string) {
@@ -299,6 +308,34 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
 
     setGoalScorerName("");
     setGoalMinute("");
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
+  async function saveManualResult() {
+    setError("");
+    const response = await fetch(`/api/v2/teams/${match.teamId}/matches/${match.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        homeTeam,
+        awayTeam,
+        matchDate,
+        format,
+        periodCount,
+        periodLengthMinutes,
+        manualHomeScore: manualHomeScore === "" ? null : Number(manualHomeScore),
+        manualAwayScore: manualAwayScore === "" ? null : Number(manualAwayScore),
+      }),
+    });
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      setError(data?.error ?? "Unable to save result.");
+      return;
+    }
+
     startTransition(() => {
       router.refresh();
     });
@@ -389,6 +426,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
               <span>{formatLabel(match.format)}</span>
               <span>{match.periodCount} periods</span>
               <span>{match.periodLengthMinutes} min</span>
+              {match.createdByDisplayName ? <span>Created by {match.createdByDisplayName}</span> : null}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -529,14 +567,43 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
               <div className="rounded-2xl bg-slate-900 px-4 py-4 text-center text-white">
                 <p className="text-xs uppercase tracking-[0.28em] text-white/70">Result</p>
                 <p className="mt-2 text-3xl font-semibold">
-                  {homeGoals} - {awayGoals}
+                  {effectiveHomeScore} - {effectiveAwayScore}
                 </p>
                 <p className="mt-2 text-sm text-white/80">
                   {match.homeTeam} vs {match.awayTeam}
                 </p>
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-4">
+              <div className="mt-4 rounded-2xl border border-border bg-white/80 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Quick result</h3>
+                    <p className="text-sm text-muted-foreground">Set the final or current score directly if you do not want to register scorers.</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr),100px,100px]">
+                  <div className="text-sm text-slate-700">
+                    <p className="font-medium">{match.homeTeam}</p>
+                    <p className="mt-3 font-medium">{match.awayTeam}</p>
+                  </div>
+                  <div className="grid gap-3">
+                    <Input inputMode="numeric" onChange={(event) => setManualHomeScore(event.target.value)} placeholder="0" value={manualHomeScore} />
+                    <Input inputMode="numeric" onChange={(event) => setManualAwayScore(event.target.value)} placeholder="0" value={manualAwayScore} />
+                  </div>
+                  <div className="flex items-end">
+                    <Button className="w-full" disabled={isPending} onClick={saveManualResult} type="button">
+                      Save result
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-border bg-white/80 p-4">
+                <div>
+                  <h3 className="font-semibold text-slate-900">Goals</h3>
+                  <p className="text-sm text-muted-foreground">Register individual goals when you want a more detailed match log.</p>
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-4">
                 <select
                   className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
                   onChange={(event) => setGoalPeriodNumber(Number(event.target.value) as 1 | 2 | 3)}
@@ -556,15 +623,31 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
                   <option value="home">{match.homeTeam}</option>
                   <option value="away">{match.awayTeam}</option>
                 </select>
-                <Input onChange={(event) => setGoalScorerName(event.target.value)} placeholder="Scorer" value={goalScorerName} />
+                {goalTeamSide === "home" ? (
+                  <select
+                    className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
+                    onChange={(event) => setGoalScorerName(event.target.value)}
+                    value={goalScorerName}
+                  >
+                    <option value="">Choose scorer</option>
+                    {teamScorerOptions.map((player) => (
+                      <option key={player.id} value={player.name}>
+                        {player.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input onChange={(event) => setGoalScorerName(event.target.value)} placeholder="Scorer or Opponent" value={goalScorerName} />
+                )}
                 <Input inputMode="numeric" onChange={(event) => setGoalMinute(event.target.value)} placeholder="Minute" value={goalMinute} />
-              </div>
+                </div>
 
-              <div className="mt-3">
-                <Button disabled={isPending} onClick={addGoal} type="button">
-                  <Plus className="h-4 w-4" />
-                  Add goal
-                </Button>
+                <div className="mt-3">
+                  <Button disabled={isPending || !goalScorerName || goalMinute === ""} onClick={addGoal} type="button">
+                    <Plus className="h-4 w-4" />
+                    Add goal
+                  </Button>
+                </div>
               </div>
 
               <div className="mt-4 space-y-2">
@@ -591,36 +674,6 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
             </section>
           ) : null}
 
-          {!presentationMode ? (
-            <section className="rounded-[24px] border border-border bg-white/85 p-3">
-              <div className="flex items-center gap-2">
-                <History className="h-4 w-4 text-slate-700" />
-                <h2 className="font-semibold">Recent history</h2>
-              </div>
-              <div className="mt-3 space-y-2">
-                {match.history.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No history yet.</p>
-                ) : (
-                  match.history.map((item) => (
-                    <div className="flex items-center justify-between gap-3 rounded-2xl border border-border px-3 py-2" key={item.id}>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-900">{humanizeHistoryAction(item.action)}</p>
-                        <p className="text-xs text-muted-foreground">{item.userDisplayName || "A coach"}</p>
-                      </div>
-                      <p className={cn("text-xs text-muted-foreground", isPending && "opacity-60")}>
-                        {new Date(item.createdAt).toLocaleString("sv-SE", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-          ) : null}
         </div>
 
         {!presentationMode && activeTab === "formation" ? (
@@ -926,23 +979,4 @@ function PlayerToken({
       </span>
     </div>
   );
-}
-
-function humanizeHistoryAction(action: string) {
-  switch (action) {
-    case "match_created":
-      return "Match created";
-    case "player_to_pitch":
-      return "Player moved to pitch";
-    case "player_to_bench":
-      return "Player moved to bench";
-    case "player_removed_from_period":
-      return "Player removed from period";
-    case "match_info_updated":
-      return "Match info updated";
-    case "goal_added":
-      return "Goal added";
-    default:
-      return action.replaceAll("_", " ");
-  }
 }

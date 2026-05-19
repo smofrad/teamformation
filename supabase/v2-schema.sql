@@ -53,6 +53,8 @@ create table if not exists public.matches (
 alter table public.matches add column if not exists home_team text;
 alter table public.matches add column if not exists away_team text;
 alter table public.matches add column if not exists period_length_minutes smallint;
+alter table public.matches add column if not exists manual_home_score smallint;
+alter table public.matches add column if not exists manual_away_score smallint;
 alter table public.matches alter column period_length_minutes set default 20;
 update public.matches
 set home_team = coalesce(home_team, opponent, ''),

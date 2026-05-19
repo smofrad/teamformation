@@ -50,13 +50,6 @@ export type V2MatchPeriod = {
   players: V2PeriodPlayer[];
 };
 
-export type V2MatchHistoryItem = {
-  id: string;
-  action: string;
-  createdAt: string;
-  userDisplayName: string | null;
-};
-
 export type V2MatchGoal = {
   id: string;
   periodNumber: number;
@@ -76,10 +69,12 @@ export type V2MatchDetail = {
   periodCount: 2 | 3;
   periodLengthMinutes: number;
   activePeriodNumber: number;
+  createdByDisplayName: string | null;
+  manualHomeScore: number | null;
+  manualAwayScore: number | null;
   players: V2Player[];
   periods: V2MatchPeriod[];
   goals: V2MatchGoal[];
-  history: V2MatchHistoryItem[];
 };
 
 export async function getV2TeamsForCurrentUser(): Promise<V2TeamSummary[]> {
@@ -191,7 +186,7 @@ export async function getV2TeamDetail(teamId: string): Promise<V2TeamDetail | nu
 export async function getV2MatchDetail(teamId: string, matchId: string): Promise<V2MatchDetail | null> {
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: team, error: teamError }, { data: match, error: matchError }, { data: history, error: historyError }, { data: goals, error: goalsError }] =
+  const [{ data: team, error: teamError }, { data: match, error: matchError }, { data: goals, error: goalsError }] =
     await Promise.all([
       supabase
         .from("teams")
@@ -221,7 +216,12 @@ export async function getV2MatchDetail(teamId: string, matchId: string): Promise
             format,
             period_count,
             period_length_minutes,
+            manual_home_score,
+            manual_away_score,
             active_period_number,
+            creator:created_by (
+              display_name
+            ),
             match_periods (
               id,
               period_number,
@@ -240,22 +240,6 @@ export async function getV2MatchDetail(teamId: string, matchId: string): Promise
         .eq("team_id", teamId)
         .single(),
       supabase
-        .from("match_history")
-        .select(
-          `
-            id,
-            action,
-            created_at,
-            profiles:user_id (
-              display_name
-            )
-          `
-        )
-        .eq("match_id", matchId)
-        .eq("team_id", teamId)
-        .order("created_at", { ascending: false })
-        .limit(8),
-      supabase
         .from("match_goals")
         .select(
           `
@@ -271,13 +255,13 @@ export async function getV2MatchDetail(teamId: string, matchId: string): Promise
         .order("minute", { ascending: true }),
     ]);
 
-  if (teamError || matchError || historyError || goalsError) {
-    const code = teamError?.code ?? matchError?.code ?? historyError?.code ?? goalsError?.code;
+  if (teamError || matchError || goalsError) {
+    const code = teamError?.code ?? matchError?.code ?? goalsError?.code;
     if (code === "PGRST116") {
       return null;
     }
 
-    throw new Error(teamError?.message ?? matchError?.message ?? historyError?.message ?? goalsError?.message ?? "Unable to load match.");
+    throw new Error(teamError?.message ?? matchError?.message ?? goalsError?.message ?? "Unable to load match.");
   }
 
   if (!team || !match) {
@@ -295,6 +279,10 @@ export async function getV2MatchDetail(teamId: string, matchId: string): Promise
     periodCount: match.period_count,
     periodLengthMinutes: match.period_length_minutes,
     activePeriodNumber: match.active_period_number,
+    createdByDisplayName:
+      match.creator && !Array.isArray(match.creator) ? (match.creator.display_name ?? null) : null,
+    manualHomeScore: match.manual_home_score,
+    manualAwayScore: match.manual_away_score,
     players: (team.players ?? [])
       .map((player) => ({
         id: player.id,
@@ -323,13 +311,6 @@ export async function getV2MatchDetail(teamId: string, matchId: string): Promise
       teamSide: goal.team_side,
       scorerName: goal.scorer_name,
       minute: goal.minute,
-    })),
-    history: (history ?? []).map((item) => ({
-      id: item.id,
-      action: item.action,
-      createdAt: item.created_at,
-      userDisplayName:
-        item.profiles && !Array.isArray(item.profiles) ? (item.profiles.display_name ?? null) : null,
     })),
   };
 }

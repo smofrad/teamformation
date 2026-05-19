@@ -21,6 +21,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ teamI
     format?: number;
     periodCount?: number;
     periodLengthMinutes?: number;
+    manualHomeScore?: number | null;
+    manualAwayScore?: number | null;
   } | null;
   const activePeriodNumber = body?.activePeriodNumber;
   const homeTeam = body?.homeTeam?.trim();
@@ -29,6 +31,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ teamI
   const format = body?.format;
   const periodCount = body?.periodCount;
   const periodLengthMinutes = body?.periodLengthMinutes;
+  const manualHomeScore = body?.manualHomeScore;
+  const manualAwayScore = body?.manualAwayScore;
 
   const isPeriodUpdate = activePeriodNumber !== undefined;
   const isInfoUpdate =
@@ -37,7 +41,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ teamI
     matchDate !== undefined ||
     format !== undefined ||
     periodCount !== undefined ||
-    periodLengthMinutes !== undefined;
+    periodLengthMinutes !== undefined ||
+    manualHomeScore !== undefined ||
+    manualAwayScore !== undefined;
 
   if (!isPeriodUpdate && !isInfoUpdate) {
     return NextResponse.json({ error: "No match update provided." }, { status: 400 });
@@ -70,6 +76,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ teamI
     if (!Number.isInteger(periodLengthMinutes) || (periodLengthMinutes ?? 0) < 1) {
       return NextResponse.json({ error: "Valid period length is required." }, { status: 400 });
     }
+
+    if (
+      (manualHomeScore !== null && manualHomeScore !== undefined && (!Number.isInteger(manualHomeScore) || manualHomeScore < 0)) ||
+      (manualAwayScore !== null && manualAwayScore !== undefined && (!Number.isInteger(manualAwayScore) || manualAwayScore < 0))
+    ) {
+      return NextResponse.json({ error: "Manual result must use whole numbers." }, { status: 400 });
+    }
   }
 
   const nextActivePeriodNumber = isPeriodUpdate ? activePeriodNumber : Math.min(match.period_count, periodCount ?? match.period_count);
@@ -85,6 +98,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ teamI
             format,
             period_count: periodCount,
             period_length_minutes: periodLengthMinutes,
+            ...(manualHomeScore !== undefined ? { manual_home_score: manualHomeScore } : {}),
+            ...(manualAwayScore !== undefined ? { manual_away_score: manualAwayScore } : {}),
           }
         : {}),
       active_period_number: nextActivePeriodNumber,
@@ -149,6 +164,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ teamI
         format,
         periodCount,
         periodLengthMinutes,
+        manualHomeScore,
+        manualAwayScore,
       },
     });
 
