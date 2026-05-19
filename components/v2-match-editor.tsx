@@ -14,7 +14,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarDays, ChevronDown, ChevronUp, Eye, EyeOff, History, Info, Plus, UserPlus, Users2, X } from "lucide-react";
+import { CalendarDays, ChevronUp, Eye, EyeOff, History, Info, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { V2MatchDetail, V2MatchPeriod, V2PeriodPlayer, V2Player } from "@/lib/supabase/v2";
@@ -90,7 +90,6 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [presentationMode, setPresentationMode] = useState(initialPresentationMode);
   const [showMatchInfo, setShowMatchInfo] = useState(false);
-  const [showControlsSheet, setShowControlsSheet] = useState(false);
   const [showSquadSheet, setShowSquadSheet] = useState(false);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -225,32 +224,12 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
     setShowSquadSheet(false);
   }
 
-  async function removePlayer(playerId: string) {
-    setError("");
-    updateLocalPeriod(activePeriodNumber, (period) => ({
-      ...period,
-      players: period.players.filter((item) => item.playerId !== playerId),
-    }));
+  function moveBenchPlayerToPitch(playerId: string) {
+    void savePlayer(playerId, "pitch", getPitchCoordinates(lineupPlayers.length));
+  }
 
-    const response = await fetch(
-      `/api/v2/teams/${match.teamId}/matches/${match.id}/periods/${activePeriodNumber}/players`,
-      {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerId }),
-      }
-    );
-
-    if (!response.ok) {
-      const data = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(data?.error ?? "Unable to remove player.");
-      startTransition(() => {
-        router.refresh();
-      });
-      return;
-    }
-
-    setShowSquadSheet(false);
+  function movePitchPlayerToBench(playerId: string) {
+    void savePlayer(playerId, "bench");
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -386,106 +365,27 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
         {error ? <div className="mt-2 rounded-2xl border px-4 py-3 text-sm status-error">{error}</div> : null}
 
         <div className="mt-2 flex min-h-0 flex-1 flex-col gap-2">
-          <PitchZone lineupPlayers={lineupPlayers} pitchRef={pitchRef} presentationMode={presentationMode} />
+          <PitchZone
+            lineupPlayers={lineupPlayers}
+            movePitchPlayerToBench={movePitchPlayerToBench}
+            pitchRef={pitchRef}
+            presentationMode={presentationMode}
+          />
 
           {!presentationMode ? (
             <>
-              <div className="sm:hidden">
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    className="flex items-center justify-between rounded-[22px] border border-border bg-white/90 px-4 py-3 text-left shadow-sm"
-                    onClick={() => setShowControlsSheet((current) => !current)}
-                    type="button"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-full bg-slate-900 p-2 text-white">
-                        <Users2 className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">Bench</p>
-                        <p className="text-xs text-muted-foreground">{benchPlayers.length} selected</p>
-                      </div>
-                    </div>
-                    <ChevronDown className={cn("h-4 w-4 transition", showControlsSheet && "rotate-180")} />
-                  </button>
-
-                  <button
-                    className="flex items-center justify-between rounded-[22px] border border-border bg-emerald-600 px-4 py-3 text-left text-white shadow-sm"
-                    onClick={() => setShowSquadSheet(true)}
-                    type="button"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-full bg-white/20 p-2 text-white">
-                        <Plus className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">Add players</p>
-                        <p className="text-xs text-emerald-50">{availablePlayers.length} in squad</p>
-                      </div>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              <div className="hidden sm:block">
-                <BenchZone benchPlayers={benchPlayers} benchRef={benchRef} />
-              </div>
+              <BenchZone
+                availablePlayersCount={availablePlayers.length}
+                benchPlayers={benchPlayers}
+                benchRef={benchRef}
+                moveBenchPlayerToPitch={moveBenchPlayerToPitch}
+                onAddPlayers={() => setShowSquadSheet(true)}
+              />
             </>
           ) : null}
 
           {!presentationMode ? (
             <>
-              <div className="hidden gap-2 lg:grid-cols-[1.2fr_1fr] sm:grid">
-                <section className="rounded-[24px] bg-emerald-50 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <UserPlus className="h-4 w-4 text-emerald-700" />
-                      <h2 className="font-semibold text-emerald-950">Squad</h2>
-                    </div>
-                    <Button onClick={() => setShowSquadSheet(true)} size="sm" type="button">
-                      <Plus className="h-4 w-4" />
-                      Add players
-                    </Button>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {availablePlayers.length === 0 ? (
-                      <p className="text-sm text-emerald-900/70">All squad players are already in this match period.</p>
-                    ) : (
-                      availablePlayers.slice(0, 8).map((player) => (
-                        <button
-                          className="rounded-full border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-950"
-                          key={player.id}
-                          onClick={() => savePlayer(player.id, "bench")}
-                          type="button"
-                        >
-                          #{player.shirtNumber} {player.name}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </section>
-
-                <section className="rounded-[24px] bg-slate-100 p-3">
-                  <h2 className="font-semibold text-slate-950">In this match</h2>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {[...lineupPlayers.map((item) => item.player), ...benchPlayers].length === 0 ? (
-                      <p className="text-sm text-slate-600">No players selected for this period yet.</p>
-                    ) : (
-                      [...lineupPlayers.map((item) => item.player), ...benchPlayers].map((player) => (
-                        <button
-                          className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900"
-                          key={player.id}
-                          onClick={() => removePlayer(player.id)}
-                          type="button"
-                        >
-                          #{player.shirtNumber} {player.name}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </section>
-              </div>
-
               <section className="rounded-[24px] border border-border bg-white/85 p-3">
                 <div className="flex items-center gap-2">
                   <History className="h-4 w-4 text-slate-700" />
@@ -517,105 +417,6 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
             </>
           ) : null}
         </div>
-
-        {!presentationMode ? (
-          <div
-            className={cn(
-              "fixed inset-x-0 bottom-0 z-40 sm:hidden",
-              showControlsSheet ? "pointer-events-auto" : "pointer-events-none"
-            )}
-          >
-            <div
-              className={cn(
-                "absolute inset-0 bg-slate-950/25 transition-opacity",
-                showControlsSheet ? "opacity-100" : "opacity-0"
-              )}
-              onClick={() => setShowControlsSheet(false)}
-            />
-            <div
-              className={cn(
-                "relative max-h-[58dvh] overflow-y-auto rounded-t-[28px] border-t border-border bg-[rgba(250,248,242,0.98)] px-3 pb-5 pt-3 shadow-[0_-24px_60px_rgba(15,23,42,0.18)] transition-transform",
-                showControlsSheet ? "translate-y-0" : "translate-y-full"
-              )}
-            >
-              <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-slate-300" />
-              <BenchZone benchPlayers={benchPlayers} benchRef={benchRef} />
-              <div className="mt-2 grid gap-2">
-                <section className="rounded-[24px] bg-emerald-50 p-3">
-                  <div className="flex items-center gap-2">
-                    <UserPlus className="h-4 w-4 text-emerald-700" />
-                    <h2 className="font-semibold text-emerald-950">Add players to this period</h2>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {availablePlayers.length === 0 ? (
-                      <p className="text-sm text-emerald-900/70">All squad players are already included in this period.</p>
-                    ) : (
-                      availablePlayers.map((player) => (
-                        <button
-                          className="rounded-full border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-950"
-                          key={player.id}
-                          onClick={() => savePlayer(player.id, "bench")}
-                          type="button"
-                        >
-                          #{player.shirtNumber} {player.name}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </section>
-
-                <section className="rounded-[24px] bg-slate-100 p-3">
-                  <h2 className="font-semibold text-slate-950">Remove from this period</h2>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {[...lineupPlayers.map((item) => item.player), ...benchPlayers].length === 0 ? (
-                      <p className="text-sm text-slate-600">No players selected for this period yet.</p>
-                    ) : (
-                      [...lineupPlayers.map((item) => item.player), ...benchPlayers].map((player) => (
-                        <button
-                          className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900"
-                          key={player.id}
-                          onClick={() => removePlayer(player.id)}
-                          type="button"
-                        >
-                          #{player.shirtNumber} {player.name}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </section>
-
-                <section className="rounded-[24px] border border-border bg-white/85 p-3">
-                  <div className="flex items-center gap-2">
-                    <History className="h-4 w-4 text-slate-700" />
-                    <h2 className="font-semibold">Recent history</h2>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {match.history.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No history yet.</p>
-                    ) : (
-                      match.history.map((item) => (
-                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-border px-3 py-2" key={item.id}>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-900">{humanizeHistoryAction(item.action)}</p>
-                            <p className="text-xs text-muted-foreground">{item.userDisplayName || "A coach"}</p>
-                          </div>
-                          <p className={cn("text-xs text-muted-foreground", isPending && "opacity-60")}>
-                            {new Date(item.createdAt).toLocaleString("sv-SE", {
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </section>
-              </div>
-            </div>
-          </div>
-        ) : null}
 
         {!presentationMode ? (
           <div
@@ -691,10 +492,12 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
 
 function PitchZone({
   lineupPlayers,
+  movePitchPlayerToBench,
   pitchRef,
   presentationMode,
 }: {
   lineupPlayers: Array<V2PeriodPlayer & { player: V2Player }>;
+  movePitchPlayerToBench: (playerId: string) => void;
   pitchRef: React.RefObject<HTMLDivElement | null>;
   presentationMode: boolean;
 }) {
@@ -729,18 +532,28 @@ function PitchZone({
       ) : null}
 
       {lineupPlayers.map((item) =>
-        presentationMode ? <StaticPitchPlayer item={item} key={item.playerId} /> : <DraggablePitchPlayer item={item} key={item.playerId} />
+        presentationMode ? (
+          <StaticPitchPlayer item={item} key={item.playerId} />
+        ) : (
+          <DraggablePitchPlayer item={item} key={item.playerId} onMoveToBench={movePitchPlayerToBench} />
+        )
       )}
     </div>
   );
 }
 
 function BenchZone({
+  availablePlayersCount,
   benchPlayers,
   benchRef,
+  moveBenchPlayerToPitch,
+  onAddPlayers,
 }: {
+  availablePlayersCount: number;
   benchPlayers: V2Player[];
   benchRef: React.RefObject<HTMLDivElement | null>;
+  moveBenchPlayerToPitch: (playerId: string) => void;
+  onAddPlayers: () => void;
 }) {
   const benchDrop = useDroppable({ id: "bench-zone" });
 
@@ -758,10 +571,22 @@ function BenchZone({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="font-semibold">Bench</h2>
-          <p className="text-sm text-muted-foreground">Drag players between bench and pitch.</p>
+          <p className="text-sm text-muted-foreground">Drag or tap players between bench and pitch.</p>
         </div>
-        <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{benchPlayers.length}</span>
+        <div className="flex items-center gap-2">
+          <Button onClick={onAddPlayers} size="sm" type="button">
+            <Plus className="h-4 w-4" />
+            Add players
+          </Button>
+          <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{benchPlayers.length}</span>
+        </div>
       </div>
+
+      {availablePlayersCount > 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {availablePlayersCount} squad {availablePlayersCount === 1 ? "player" : "players"} available to add
+        </p>
+      ) : null}
 
       <div className="mt-3 flex min-h-16 flex-wrap gap-2">
         {benchPlayers.length === 0 ? (
@@ -769,14 +594,22 @@ function BenchZone({
             Bench is empty
           </div>
         ) : (
-          benchPlayers.map((player) => <DraggableBenchPlayer key={player.id} player={player} />)
+          benchPlayers.map((player) => (
+            <DraggableBenchPlayer key={player.id} onMoveToPitch={moveBenchPlayerToPitch} player={player} />
+          ))
         )}
       </div>
     </div>
   );
 }
 
-function DraggablePitchPlayer({ item }: { item: V2PeriodPlayer & { player: V2Player } }) {
+function DraggablePitchPlayer({
+  item,
+  onMoveToBench,
+}: {
+  item: V2PeriodPlayer & { player: V2Player };
+  onMoveToBench: (playerId: string) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: item.playerId });
 
   return (
@@ -790,6 +623,7 @@ function DraggablePitchPlayer({ item }: { item: V2PeriodPlayer & { player: V2Pla
         top: `${item.y ?? 50}%`,
         transform: transform ? `translate(calc(-50% + ${transform.x}px), calc(-50% + ${transform.y}px))` : "translate(-50%, -50%)",
       }}
+      onDoubleClick={() => onMoveToBench(item.playerId)}
       type="button"
     >
       <PlayerToken player={item.player} />
@@ -812,7 +646,13 @@ function StaticPitchPlayer({ item }: { item: V2PeriodPlayer & { player: V2Player
   );
 }
 
-function DraggableBenchPlayer({ player }: { player: V2Player }) {
+function DraggableBenchPlayer({
+  player,
+  onMoveToPitch,
+}: {
+  player: V2Player;
+  onMoveToPitch: (playerId: string) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: player.id });
 
   return (
@@ -820,6 +660,7 @@ function DraggableBenchPlayer({ player }: { player: V2Player }) {
       {...attributes}
       {...listeners}
       className={cn("touch-none select-none cursor-grab active:cursor-grabbing", isDragging && "opacity-40")}
+      onDoubleClick={() => onMoveToPitch(player.id)}
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform) }}
       type="button"
