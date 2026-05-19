@@ -14,7 +14,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarDays, ChevronDown, ChevronUp, Eye, EyeOff, History, Info, UserPlus, Users2 } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronUp, Eye, EyeOff, History, Info, Plus, UserPlus, Users2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { V2MatchDetail, V2MatchPeriod, V2PeriodPlayer, V2Player } from "@/lib/supabase/v2";
@@ -91,6 +91,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const [presentationMode, setPresentationMode] = useState(initialPresentationMode);
   const [showMatchInfo, setShowMatchInfo] = useState(false);
   const [showControlsSheet, setShowControlsSheet] = useState(false);
+  const [showSquadSheet, setShowSquadSheet] = useState(false);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const sensors = useSensors(
@@ -220,6 +221,8 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
       });
       return;
     }
+
+    setShowSquadSheet(false);
   }
 
   async function removePlayer(playerId: string) {
@@ -246,6 +249,8 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
       });
       return;
     }
+
+    setShowSquadSheet(false);
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -386,24 +391,40 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
           {!presentationMode ? (
             <>
               <div className="sm:hidden">
-                <button
-                  className="flex w-full items-center justify-between rounded-[22px] border border-border bg-white/90 px-4 py-3 text-left shadow-sm"
-                  onClick={() => setShowControlsSheet((current) => !current)}
-                  type="button"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-full bg-slate-900 p-2 text-white">
-                      <Users2 className="h-4 w-4" />
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    className="flex items-center justify-between rounded-[22px] border border-border bg-white/90 px-4 py-3 text-left shadow-sm"
+                    onClick={() => setShowControlsSheet((current) => !current)}
+                    type="button"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-full bg-slate-900 p-2 text-white">
+                        <Users2 className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Bench</p>
+                        <p className="text-xs text-muted-foreground">{benchPlayers.length} selected</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">Bench and controls</p>
-                      <p className="text-xs text-muted-foreground">
-                        {benchPlayers.length} on bench, {availablePlayers.length} available
-                      </p>
+                    <ChevronDown className={cn("h-4 w-4 transition", showControlsSheet && "rotate-180")} />
+                  </button>
+
+                  <button
+                    className="flex items-center justify-between rounded-[22px] border border-border bg-emerald-600 px-4 py-3 text-left text-white shadow-sm"
+                    onClick={() => setShowSquadSheet(true)}
+                    type="button"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-full bg-white/20 p-2 text-white">
+                        <Plus className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">Add players</p>
+                        <p className="text-xs text-emerald-50">{availablePlayers.length} in squad</p>
+                      </div>
                     </div>
-                  </div>
-                  <ChevronDown className={cn("h-4 w-4 transition", showControlsSheet && "rotate-180")} />
-                </button>
+                  </button>
+                </div>
               </div>
 
               <div className="hidden sm:block">
@@ -416,15 +437,21 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
             <>
               <div className="hidden gap-2 lg:grid-cols-[1.2fr_1fr] sm:grid">
                 <section className="rounded-[24px] bg-emerald-50 p-3">
-                  <div className="flex items-center gap-2">
-                    <UserPlus className="h-4 w-4 text-emerald-700" />
-                    <h2 className="font-semibold text-emerald-950">Add players to this period</h2>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <UserPlus className="h-4 w-4 text-emerald-700" />
+                      <h2 className="font-semibold text-emerald-950">Squad</h2>
+                    </div>
+                    <Button onClick={() => setShowSquadSheet(true)} size="sm" type="button">
+                      <Plus className="h-4 w-4" />
+                      Add players
+                    </Button>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {availablePlayers.length === 0 ? (
-                      <p className="text-sm text-emerald-900/70">All squad players are already included in this period.</p>
+                      <p className="text-sm text-emerald-900/70">All squad players are already in this match period.</p>
                     ) : (
-                      availablePlayers.map((player) => (
+                      availablePlayers.slice(0, 8).map((player) => (
                         <button
                           className="rounded-full border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-950"
                           key={player.id}
@@ -439,7 +466,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
                 </section>
 
                 <section className="rounded-[24px] bg-slate-100 p-3">
-                  <h2 className="font-semibold text-slate-950">Remove from this period</h2>
+                  <h2 className="font-semibold text-slate-950">In this match</h2>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {[...lineupPlayers.map((item) => item.player), ...benchPlayers].length === 0 ? (
                       <p className="text-sm text-slate-600">No players selected for this period yet.</p>
@@ -589,6 +616,72 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
             </div>
           </div>
         ) : null}
+
+        {!presentationMode ? (
+          <div
+            className={cn(
+              "fixed inset-x-0 bottom-0 z-50",
+              showSquadSheet ? "pointer-events-auto" : "pointer-events-none"
+            )}
+          >
+            <div
+              className={cn(
+                "absolute inset-0 bg-slate-950/25 transition-opacity",
+                showSquadSheet ? "opacity-100" : "opacity-0"
+              )}
+              onClick={() => setShowSquadSheet(false)}
+            />
+            <div
+              className={cn(
+                "relative ml-auto max-h-[68dvh] overflow-y-auto rounded-t-[28px] border-t border-border bg-[rgba(250,248,242,0.98)] px-3 pb-5 pt-3 shadow-[0_-24px_60px_rgba(15,23,42,0.18)] transition-transform sm:max-w-xl sm:rounded-[28px] sm:border sm:pb-4 sm:pt-4",
+                showSquadSheet ? "translate-y-0 sm:translate-y-0" : "translate-y-full sm:translate-y-6 sm:opacity-0"
+              )}
+            >
+              <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-slate-300 sm:hidden" />
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-emerald-700">Squad</p>
+                  <h2 className="mt-1 text-lg font-semibold text-slate-950">Add players to this match</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Drag directly to pitch or bench, or use quick actions.</p>
+                </div>
+                <Button onClick={() => setShowSquadSheet(false)} size="icon" type="button" variant="ghost">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {availablePlayers.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border bg-white/70 p-4 text-sm text-muted-foreground">
+                    All squad players are already added to this match period.
+                  </div>
+                ) : (
+                  availablePlayers.map((player) => (
+                    <div
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-white/90 px-3 py-3"
+                      key={player.id}
+                    >
+                      <DraggableSquadPlayer player={player} />
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button onClick={() => savePlayer(player.id, "bench")} size="sm" type="button" variant="outline">
+                          To bench
+                        </Button>
+                        <Button
+                          onClick={() =>
+                            savePlayer(player.id, "pitch", getPitchCoordinates(lineupPlayers.length))
+                          }
+                          size="sm"
+                          type="button"
+                        >
+                          To pitch
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {!presentationMode ? <DragOverlay>{activeDragPlayer ? <PlayerToken player={activeDragPlayer} variant="overlay" /> : null}</DragOverlay> : null}
@@ -733,6 +826,28 @@ function DraggableBenchPlayer({ player }: { player: V2Player }) {
     >
       <PlayerToken player={player} variant="bench" />
     </button>
+  );
+}
+
+function DraggableSquadPlayer({ player }: { player: V2Player }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: player.id });
+
+  return (
+    <div
+      {...attributes}
+      {...listeners}
+      className={cn("flex min-w-0 items-center gap-3 touch-none select-none cursor-grab active:cursor-grabbing", isDragging && "opacity-40")}
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform) }}
+    >
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+        {player.shirtNumber}
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium text-slate-900">{player.name}</p>
+        <p className="text-xs text-muted-foreground">Drag to pitch or bench</p>
+      </div>
+    </div>
   );
 }
 
