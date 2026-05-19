@@ -37,15 +37,41 @@ create table if not exists public.players (
 create table if not exists public.matches (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null references public.teams(id) on delete cascade,
-  opponent text not null,
+  home_team text not null,
+  away_team text not null,
   match_date date not null,
   format smallint not null check (format in (7, 9, 11)),
   period_count smallint not null check (period_count in (2, 3)),
+  period_length_minutes smallint not null default 20 check (period_length_minutes > 0 and period_length_minutes <= 90),
   active_period_number smallint not null default 1,
   created_by uuid references public.profiles(id) on delete set null,
   updated_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+alter table public.matches add column if not exists home_team text;
+alter table public.matches add column if not exists away_team text;
+alter table public.matches add column if not exists period_length_minutes smallint;
+alter table public.matches alter column period_length_minutes set default 20;
+update public.matches
+set home_team = coalesce(home_team, opponent, ''),
+    away_team = coalesce(away_team, opponent, ''),
+    period_length_minutes = coalesce(period_length_minutes, 20);
+alter table public.matches alter column home_team set not null;
+alter table public.matches alter column away_team set not null;
+alter table public.matches alter column period_length_minutes set not null;
+
+create table if not exists public.match_goals (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references public.matches(id) on delete cascade,
+  team_id uuid not null references public.teams(id) on delete cascade,
+  period_number smallint not null check (period_number between 1 and 3),
+  team_side text not null check (team_side in ('home', 'away')),
+  scorer_name text not null,
+  minute smallint not null check (minute >= 0 and minute <= 200),
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.match_periods (
@@ -133,6 +159,7 @@ alter table public.matches enable row level security;
 alter table public.match_periods enable row level security;
 alter table public.period_players enable row level security;
 alter table public.match_history enable row level security;
+alter table public.match_goals enable row level security;
 
 create policy "profiles readable by authenticated users"
 on public.profiles for select
@@ -233,4 +260,14 @@ on public.match_history for insert
 to authenticated
 with check (
   public.is_team_member(match_history.team_id)
+);
+
+create policy "match_goals manageable by team members"
+on public.match_goals for all
+to authenticated
+using (
+  public.is_team_member(match_goals.team_id)
+)
+with check (
+  public.is_team_member(match_goals.team_id)
 );

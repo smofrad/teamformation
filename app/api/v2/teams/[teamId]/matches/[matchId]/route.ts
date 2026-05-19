@@ -13,11 +13,34 @@ export async function PATCH(request: Request, context: { params: Promise<{ teamI
   }
 
   const { teamId, matchId } = await context.params;
-  const body = (await request.json().catch(() => null)) as { activePeriodNumber?: number } | null;
+  const body = (await request.json().catch(() => null)) as {
+    activePeriodNumber?: number;
+    homeTeam?: string;
+    awayTeam?: string;
+    matchDate?: string;
+    format?: number;
+    periodCount?: number;
+    periodLengthMinutes?: number;
+  } | null;
   const activePeriodNumber = body?.activePeriodNumber;
+  const homeTeam = body?.homeTeam?.trim();
+  const awayTeam = body?.awayTeam?.trim();
+  const matchDate = body?.matchDate?.trim();
+  const format = body?.format;
+  const periodCount = body?.periodCount;
+  const periodLengthMinutes = body?.periodLengthMinutes;
 
-  if (![1, 2, 3].includes(activePeriodNumber ?? 0)) {
-    return NextResponse.json({ error: "Valid period is required." }, { status: 400 });
+  const isPeriodUpdate = activePeriodNumber !== undefined;
+  const isInfoUpdate =
+    homeTeam !== undefined ||
+    awayTeam !== undefined ||
+    matchDate !== undefined ||
+    format !== undefined ||
+    periodCount !== undefined ||
+    periodLengthMinutes !== undefined;
+
+  if (!isPeriodUpdate && !isInfoUpdate) {
+    return NextResponse.json({ error: "No match update provided." }, { status: 400 });
   }
 
   const { data: match, error: matchError } = await supabase
@@ -31,14 +54,39 @@ export async function PATCH(request: Request, context: { params: Promise<{ teamI
     return NextResponse.json({ error: matchError?.message ?? "Match not found." }, { status: 404 });
   }
 
-  if (activePeriodNumber! > match.period_count) {
+  if (isPeriodUpdate && ![1, 2, 3].includes(activePeriodNumber ?? 0)) {
+    return NextResponse.json({ error: "Valid period is required." }, { status: 400 });
+  }
+
+  if (isPeriodUpdate && activePeriodNumber! > match.period_count) {
     return NextResponse.json({ error: "This period does not exist for the match." }, { status: 400 });
   }
 
+  if (isInfoUpdate) {
+    if (!homeTeam || !awayTeam || !matchDate || ![7, 9, 11].includes(format ?? 0) || ![2, 3].includes(periodCount ?? 0)) {
+      return NextResponse.json({ error: "Home team, away team, date, format and periods are required." }, { status: 400 });
+    }
+
+    if (!Number.isInteger(periodLengthMinutes) || (periodLengthMinutes ?? 0) < 1) {
+      return NextResponse.json({ error: "Valid period length is required." }, { status: 400 });
+    }
+  }
+
+  const nextActivePeriodNumber = isPeriodUpdate ? activePeriodNumber : Math.min(match.period_count, periodCount ?? match.period_count);
   const { error } = await supabase
     .from("matches")
     .update({
-      active_period_number: activePeriodNumber,
+      ...(isInfoUpdate
+        ? {
+            home_team: homeTeam,
+            away_team: awayTeam,
+            match_date: matchDate,
+            format,
+            period_count: periodCount,
+            period_length_minutes: periodLengthMinutes,
+          }
+        : {}),
+      active_period_number: nextActivePeriodNumber,
       updated_by: user.id,
       updated_at: new Date().toISOString(),
     })
@@ -47,6 +95,65 @@ export async function PATCH(request: Request, context: { params: Promise<{ teamI
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  if (isInfoUpdate && periodCount !== match.period_count) {
+    const targetLabels = Array.from({ length: periodCount! }, (_, index) => ({
+      match_id: matchId,
+      period_number: index + 1,
+      label: periodCount === 2 ? (index === 0 ? "1st half" : "2nd half") : `Period ${index + 1}`,
+      is_customized: index === 0,
+    }));
+
+    const { data: existingPeriods, error: existingPeriodsError } = await supabase
+      .from("match_periods")
+      .select("id, period_number")
+      .eq("match_id", matchId);
+
+    if (existingPeriodsError) {
+      return NextResponse.json({ error: existingPeriodsError.message }, { status: 400 });
+    }
+
+    const existingPeriodNumbers = new Set((existingPeriods ?? []).map((period) => period.period_number));
+    const periodsToInsert = targetLabels.filter((period) => !existingPeriodNumbers.has(period.period_number));
+    const periodsToDelete = (existingPeriods ?? [])
+      .filter((period) => period.period_number > periodCount!)
+      .map((period) => period.id);
+
+    if (periodsToInsert.length > 0) {
+      const { error: insertPeriodsError } = await supabase.from("match_periods").insert(periodsToInsert);
+      if (insertPeriodsError) {
+        return NextResponse.json({ error: insertPeriodsError.message }, { status: 400 });
+      }
+    }
+
+    if (periodsToDelete.length > 0) {
+      const { error: deletePeriodsError } = await supabase.from("match_periods").delete().in("id", periodsToDelete);
+      if (deletePeriodsError) {
+        return NextResponse.json({ error: deletePeriodsError.message }, { status: 400 });
+      }
+    }
+  }
+
+  if (isInfoUpdate) {
+    const { error: historyError } = await supabase.from("match_history").insert({
+      match_id: matchId,
+      team_id: teamId,
+      user_id: user.id,
+      action: "match_info_updated",
+      payload: {
+        homeTeam,
+        awayTeam,
+        matchDate,
+        format,
+        periodCount,
+        periodLengthMinutes,
+      },
+    });
+
+    if (historyError) {
+      return NextResponse.json({ error: historyError.message }, { status: 400 });
+    }
   }
 
   return NextResponse.json({ ok: true });

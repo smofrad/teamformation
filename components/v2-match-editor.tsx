@@ -17,6 +17,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { CalendarDays, ChevronUp, Eye, EyeOff, History, Info, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { V2MatchDetail, V2MatchPeriod, V2PeriodPlayer, V2Player } from "@/lib/supabase/v2";
 import { cn } from "@/lib/utils";
 
@@ -89,8 +90,19 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const [localPeriods, setLocalPeriods] = useState(match.periods);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [presentationMode, setPresentationMode] = useState(initialPresentationMode);
+  const [activeTab, setActiveTab] = useState<"formation" | "info" | "events">("formation");
   const [showMatchInfo, setShowMatchInfo] = useState(false);
   const [showSquadSheet, setShowSquadSheet] = useState(false);
+  const [homeTeam, setHomeTeam] = useState(match.homeTeam);
+  const [awayTeam, setAwayTeam] = useState(match.awayTeam);
+  const [matchDate, setMatchDate] = useState(match.matchDate);
+  const [format, setFormat] = useState<7 | 9 | 11>(match.format);
+  const [periodCount, setPeriodCount] = useState<2 | 3>(match.periodCount);
+  const [periodLengthMinutes, setPeriodLengthMinutes] = useState(match.periodLengthMinutes);
+  const [goalPeriodNumber, setGoalPeriodNumber] = useState<1 | 2 | 3>(Math.min(match.periodCount, 1) as 1 | 2 | 3);
+  const [goalTeamSide, setGoalTeamSide] = useState<"home" | "away">("home");
+  const [goalScorerName, setGoalScorerName] = useState("");
+  const [goalMinute, setGoalMinute] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const sensors = useSensors(
@@ -104,6 +116,12 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   useEffect(() => {
     setLocalPeriods(match.periods);
     setActivePeriodNumber(match.activePeriodNumber);
+    setHomeTeam(match.homeTeam);
+    setAwayTeam(match.awayTeam);
+    setMatchDate(match.matchDate);
+    setFormat(match.format);
+    setPeriodCount(match.periodCount);
+    setPeriodLengthMinutes(match.periodLengthMinutes);
   }, [match.activePeriodNumber, match.id, match.periods]);
 
   const activePeriod = useMemo(
@@ -137,6 +155,8 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const activeDragPlayer = useMemo(() => (activeDragId ? playersById.get(activeDragId) ?? null : null), [activeDragId, playersById]);
   const lineupPlayerIds = useMemo(() => new Set(lineupPlayers.map((item) => item.playerId)), [lineupPlayers]);
   const benchPlayerIds = useMemo(() => new Set(benchPlayers.map((item) => item.id)), [benchPlayers]);
+  const homeGoals = useMemo(() => match.goals.filter((goal) => goal.teamSide === "home").length, [match.goals]);
+  const awayGoals = useMemo(() => match.goals.filter((goal) => goal.teamSide === "away").length, [match.goals]);
 
   function updateLocalPeriod(periodNumber: number, updater: (period: EffectivePeriod) => EffectivePeriod) {
     setLocalPeriods((currentPeriods) => {
@@ -232,6 +252,58 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
     void savePlayer(playerId, "bench");
   }
 
+  async function saveMatchInfo() {
+    setError("");
+    const response = await fetch(`/api/v2/teams/${match.teamId}/matches/${match.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        homeTeam,
+        awayTeam,
+        matchDate,
+        format,
+        periodCount,
+        periodLengthMinutes,
+      }),
+    });
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      setError(data?.error ?? "Unable to save match info.");
+      return;
+    }
+
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
+  async function addGoal() {
+    setError("");
+    const response = await fetch(`/api/v2/teams/${match.teamId}/matches/${match.id}/goals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        periodNumber: goalPeriodNumber,
+        teamSide: goalTeamSide,
+        scorerName: goalScorerName,
+        minute: Number(goalMinute),
+      }),
+    });
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      setError(data?.error ?? "Unable to add goal.");
+      return;
+    }
+
+    setGoalScorerName("");
+    setGoalMinute("");
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
   function handleDragStart(event: DragStartEvent) {
     if (presentationMode) return;
     setActiveDragId(String(event.active.id));
@@ -306,13 +378,17 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.28em] text-emerald-700">{match.teamName}</p>
-            <h1 className="mt-1 text-xl font-semibold sm:text-2xl">{match.opponent}</h1>
+            <h1 className="mt-1 text-xl font-semibold sm:text-2xl">
+              {match.homeTeam} vs {match.awayTeam}
+            </h1>
             <div className="mt-1 hidden flex-wrap items-center gap-2 text-xs text-muted-foreground sm:flex sm:text-sm">
               <span className="flex items-center gap-2">
                 <CalendarDays className="h-4 w-4" />
                 {new Date(match.matchDate).toLocaleDateString("sv-SE")}
               </span>
               <span>{formatLabel(match.format)}</span>
+              <span>{match.periodCount} periods</span>
+              <span>{match.periodLengthMinutes} min</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -336,9 +412,31 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
               {new Date(match.matchDate).toLocaleDateString("sv-SE")}
             </span>
             <span>{formatLabel(match.format)}</span>
+            <span>{match.periodLengthMinutes} min</span>
           </div>
         ) : null}
 
+        <div className="mt-2 grid grid-cols-3 gap-2 rounded-2xl border border-border bg-white/90 p-1">
+          {[
+            ["formation", "Formation"],
+            ["info", "Info"],
+            ["events", "Events"],
+          ].map(([tabKey, label]) => (
+            <button
+              className={cn(
+                "rounded-xl px-3 py-2 text-sm font-medium transition",
+                activeTab === tabKey ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-secondary"
+              )}
+              key={tabKey}
+              onClick={() => setActiveTab(tabKey as "formation" | "info" | "events")}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "formation" ? (
         <div className="mt-2 flex items-center gap-2">
           <div className="flex min-w-0 flex-1 overflow-x-auto rounded-2xl border border-border bg-white/90 p-1">
             {match.periods.map((period) => (
@@ -361,64 +459,171 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
             <span className="hidden sm:inline">{presentationMode ? "Exit presentation" : "Presentation"}</span>
           </Button>
         </div>
+        ) : null}
 
         {error ? <div className="mt-2 rounded-2xl border px-4 py-3 text-sm status-error">{error}</div> : null}
 
         <div className="mt-2 flex min-h-0 flex-1 flex-col gap-2">
-          <PitchZone
-            lineupPlayers={lineupPlayers}
-            movePitchPlayerToBench={movePitchPlayerToBench}
-            pitchRef={pitchRef}
-            presentationMode={presentationMode}
-          />
-
-          {!presentationMode ? (
+          {activeTab === "formation" ? (
             <>
-              <BenchZone
-                availablePlayersCount={availablePlayers.length}
-                benchPlayers={benchPlayers}
-                benchRef={benchRef}
-                moveBenchPlayerToPitch={moveBenchPlayerToPitch}
-                onAddPlayers={() => setShowSquadSheet(true)}
+              <PitchZone
+                lineupPlayers={lineupPlayers}
+                movePitchPlayerToBench={movePitchPlayerToBench}
+                pitchRef={pitchRef}
+                presentationMode={presentationMode}
               />
+
+              {!presentationMode ? (
+                <BenchZone
+                  availablePlayersCount={availablePlayers.length}
+                  benchPlayers={benchPlayers}
+                  benchRef={benchRef}
+                  moveBenchPlayerToPitch={moveBenchPlayerToPitch}
+                  onAddPlayers={() => setShowSquadSheet(true)}
+                />
+              ) : null}
             </>
           ) : null}
 
-          {!presentationMode ? (
-            <>
-              <section className="rounded-[24px] border border-border bg-white/85 p-3">
-                <div className="flex items-center gap-2">
-                  <History className="h-4 w-4 text-slate-700" />
-                  <h2 className="font-semibold">Recent history</h2>
-                </div>
-                <div className="mt-3 space-y-2">
-                  {match.history.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No history yet.</p>
-                  ) : (
-                    match.history.map((item) => (
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-border px-3 py-2" key={item.id}>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-900">{humanizeHistoryAction(item.action)}</p>
-                          <p className="text-xs text-muted-foreground">{item.userDisplayName || "A coach"}</p>
-                        </div>
-                        <p className={cn("text-xs text-muted-foreground", isPending && "opacity-60")}>
-                          {new Date(item.createdAt).toLocaleString("sv-SE", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+          {activeTab === "info" ? (
+            <section className="rounded-[24px] border border-border bg-white/85 p-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input onChange={(event) => setHomeTeam(event.target.value)} placeholder="Home team" value={homeTeam} />
+                <Input onChange={(event) => setAwayTeam(event.target.value)} placeholder="Away team" value={awayTeam} />
+                <Input onChange={(event) => setMatchDate(event.target.value)} type="date" value={matchDate} />
+                <select
+                  className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
+                  onChange={(event) => setFormat(Number(event.target.value) as 7 | 9 | 11)}
+                  value={format}
+                >
+                  <option value={7}>7-a-side</option>
+                  <option value={9}>9-a-side</option>
+                  <option value={11}>11-a-side</option>
+                </select>
+                <select
+                  className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
+                  onChange={(event) => setPeriodCount(Number(event.target.value) as 2 | 3)}
+                  value={periodCount}
+                >
+                  <option value={2}>1st half / 2nd half</option>
+                  <option value={3}>Three periods</option>
+                </select>
+                <Input
+                  inputMode="numeric"
+                  onChange={(event) => setPeriodLengthMinutes(Number(event.target.value) || 0)}
+                  placeholder="Minutes per period"
+                  value={periodLengthMinutes}
+                />
+              </div>
+
+              <div className="mt-4">
+                <Button disabled={isPending} onClick={saveMatchInfo} type="button">
+                  Save match info
+                </Button>
+              </div>
+            </section>
+          ) : null}
+
+          {activeTab === "events" ? (
+            <section className="rounded-[24px] border border-border bg-white/85 p-4">
+              <div className="rounded-2xl bg-slate-900 px-4 py-4 text-center text-white">
+                <p className="text-xs uppercase tracking-[0.28em] text-white/70">Result</p>
+                <p className="mt-2 text-3xl font-semibold">
+                  {homeGoals} - {awayGoals}
+                </p>
+                <p className="mt-2 text-sm text-white/80">
+                  {match.homeTeam} vs {match.awayTeam}
+                </p>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                <select
+                  className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
+                  onChange={(event) => setGoalPeriodNumber(Number(event.target.value) as 1 | 2 | 3)}
+                  value={goalPeriodNumber}
+                >
+                  {Array.from({ length: match.periodCount }, (_, index) => index + 1).map((period) => (
+                    <option key={period} value={period}>
+                      Period {period}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
+                  onChange={(event) => setGoalTeamSide(event.target.value as "home" | "away")}
+                  value={goalTeamSide}
+                >
+                  <option value="home">{match.homeTeam}</option>
+                  <option value="away">{match.awayTeam}</option>
+                </select>
+                <Input onChange={(event) => setGoalScorerName(event.target.value)} placeholder="Scorer" value={goalScorerName} />
+                <Input inputMode="numeric" onChange={(event) => setGoalMinute(event.target.value)} placeholder="Minute" value={goalMinute} />
+              </div>
+
+              <div className="mt-3">
+                <Button disabled={isPending} onClick={addGoal} type="button">
+                  <Plus className="h-4 w-4" />
+                  Add goal
+                </Button>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {match.goals.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border bg-white/70 p-4 text-sm text-muted-foreground">
+                    No goals registered yet.
+                  </div>
+                ) : (
+                  match.goals.map((goal) => (
+                    <div className="flex items-center justify-between gap-3 rounded-2xl border border-border px-3 py-3" key={goal.id}>
+                      <div>
+                        <p className="font-medium text-slate-900">{goal.minute}' {goal.scorerName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {goal.teamSide === "home" ? match.homeTeam : match.awayTeam} • Period {goal.periodNumber}
                         </p>
                       </div>
-                    ))
-                  )}
-                </div>
-              </section>
-            </>
+                      <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-slate-700">
+                        {goal.teamSide === "home" ? "Home" : "Away"}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+          ) : null}
+
+          {!presentationMode ? (
+            <section className="rounded-[24px] border border-border bg-white/85 p-3">
+              <div className="flex items-center gap-2">
+                <History className="h-4 w-4 text-slate-700" />
+                <h2 className="font-semibold">Recent history</h2>
+              </div>
+              <div className="mt-3 space-y-2">
+                {match.history.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No history yet.</p>
+                ) : (
+                  match.history.map((item) => (
+                    <div className="flex items-center justify-between gap-3 rounded-2xl border border-border px-3 py-2" key={item.id}>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-900">{humanizeHistoryAction(item.action)}</p>
+                        <p className="text-xs text-muted-foreground">{item.userDisplayName || "A coach"}</p>
+                      </div>
+                      <p className={cn("text-xs text-muted-foreground", isPending && "opacity-60")}>
+                        {new Date(item.createdAt).toLocaleString("sv-SE", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
           ) : null}
         </div>
 
-        {!presentationMode ? (
+        {!presentationMode && activeTab === "formation" ? (
           <div
             className={cn(
               "fixed inset-x-0 bottom-0 z-50",
@@ -623,7 +828,7 @@ function DraggablePitchPlayer({
         top: `${item.y ?? 50}%`,
         transform: transform ? `translate(calc(-50% + ${transform.x}px), calc(-50% + ${transform.y}px))` : "translate(-50%, -50%)",
       }}
-      onDoubleClick={() => onMoveToBench(item.playerId)}
+      onClick={() => onMoveToBench(item.playerId)}
       type="button"
     >
       <PlayerToken player={item.player} />
@@ -660,7 +865,7 @@ function DraggableBenchPlayer({
       {...attributes}
       {...listeners}
       className={cn("touch-none select-none cursor-grab active:cursor-grabbing", isDragging && "opacity-40")}
-      onDoubleClick={() => onMoveToPitch(player.id)}
+      onClick={() => onMoveToPitch(player.id)}
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform) }}
       type="button"
@@ -733,6 +938,10 @@ function humanizeHistoryAction(action: string) {
       return "Player moved to bench";
     case "player_removed_from_period":
       return "Player removed from period";
+    case "match_info_updated":
+      return "Match info updated";
+    case "goal_added":
+      return "Goal added";
     default:
       return action.replaceAll("_", " ");
   }

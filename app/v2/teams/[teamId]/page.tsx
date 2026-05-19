@@ -62,7 +62,7 @@ export default async function V2TeamPage({ params }: { params: Promise<{ teamId:
           )}
         </section>
 
-        <V2TeamMatches matches={team.matches} teamId={team.id} />
+        <V2TeamMatches matches={team.matches} teamId={team.id} teamName={team.name} />
       </div>
     </main>
   );

@@ -14,31 +14,45 @@ export async function POST(request: Request, context: { params: Promise<{ teamId
 
   const { teamId } = await context.params;
   const body = (await request.json().catch(() => null)) as {
-    opponent?: string;
+    homeTeam?: string;
+    awayTeam?: string;
     matchDate?: string;
     format?: number;
     periodCount?: number;
+    periodLengthMinutes?: number;
     sourceMatchId?: string;
   } | null;
 
-  const opponent = body?.opponent?.trim();
+  const homeTeam = body?.homeTeam?.trim();
+  const awayTeam = body?.awayTeam?.trim();
   const matchDate = body?.matchDate?.trim();
   const format = body?.format;
   const periodCount = body?.periodCount;
+  const periodLengthMinutes = body?.periodLengthMinutes;
   const sourceMatchId = body?.sourceMatchId?.trim();
 
-  if (!opponent || !matchDate || ![7, 9, 11].includes(format ?? 0) || ![2, 3].includes(periodCount ?? 0)) {
-    return NextResponse.json({ error: "Opponent, date, format and periods are required." }, { status: 400 });
+  if (
+    !homeTeam ||
+    !awayTeam ||
+    !matchDate ||
+    ![7, 9, 11].includes(format ?? 0) ||
+    ![2, 3].includes(periodCount ?? 0) ||
+    !Number.isInteger(periodLengthMinutes) ||
+    (periodLengthMinutes ?? 0) < 1
+  ) {
+    return NextResponse.json({ error: "Home team, away team, date, format, periods and period length are required." }, { status: 400 });
   }
 
   const { data: match, error: matchError } = await supabase
     .from("matches")
     .insert({
       team_id: teamId,
-      opponent,
+      home_team: homeTeam,
+      away_team: awayTeam,
       match_date: matchDate,
       format,
       period_count: periodCount,
+      period_length_minutes: periodLengthMinutes,
       active_period_number: 1,
       created_by: user.id,
       updated_by: user.id,
@@ -144,10 +158,12 @@ export async function POST(request: Request, context: { params: Promise<{ teamId
     user_id: user.id,
     action: sourceMatchId ? "match_copied" : "match_created",
     payload: {
-      opponent,
+      homeTeam,
+      awayTeam,
       matchDate,
       format,
       periodCount,
+      periodLengthMinutes,
       sourceMatchId: sourceMatchId ?? null,
     },
   });

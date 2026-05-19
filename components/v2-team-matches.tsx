@@ -11,17 +11,21 @@ import type { V2MatchSummary } from "@/lib/supabase/v2";
 
 export function V2TeamMatches({
   matches,
+  teamName,
   teamId,
 }: {
   matches: V2MatchSummary[];
+  teamName: string;
   teamId: string;
 }) {
   const router = useRouter();
   const [createMode, setCreateMode] = useState<"blank" | "copy">("blank");
-  const [opponent, setOpponent] = useState("");
+  const [homeTeam, setHomeTeam] = useState(teamName);
+  const [awayTeam, setAwayTeam] = useState("");
   const [matchDate, setMatchDate] = useState("");
   const [format, setFormat] = useState<7 | 9 | 11>(7);
   const [periodCount, setPeriodCount] = useState<2 | 3>(2);
+  const [periodLengthMinutes, setPeriodLengthMinutes] = useState(20);
   const [sourceMatchId, setSourceMatchId] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -36,10 +40,12 @@ export function V2TeamMatches({
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        opponent,
+        homeTeam,
+        awayTeam,
         matchDate,
         format,
         periodCount,
+        periodLengthMinutes,
         sourceMatchId: createMode === "copy" ? sourceMatchId : undefined,
       }),
     });
@@ -51,10 +57,12 @@ export function V2TeamMatches({
       return;
     }
 
-    setOpponent("");
+    setHomeTeam(teamName);
+    setAwayTeam("");
     setMatchDate("");
     setFormat(7);
     setPeriodCount(2);
+    setPeriodLengthMinutes(20);
     setSourceMatchId("");
     setCreateMode("blank");
     startTransition(() => {
@@ -90,9 +98,12 @@ export function V2TeamMatches({
           </button>
         </div>
 
-        <Input onChange={(event) => setOpponent(event.target.value)} placeholder="Opponent" value={opponent} />
-        <Input onChange={(event) => setMatchDate(event.target.value)} type="date" value={matchDate} />
         <div className="grid gap-3 sm:grid-cols-2">
+          <Input onChange={(event) => setHomeTeam(event.target.value)} placeholder="Home team" value={homeTeam} />
+          <Input onChange={(event) => setAwayTeam(event.target.value)} placeholder="Away team" value={awayTeam} />
+        </div>
+        <Input onChange={(event) => setMatchDate(event.target.value)} type="date" value={matchDate} />
+        <div className="grid gap-3 sm:grid-cols-3">
           <select
             className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
             onChange={(event) => setFormat(Number(event.target.value) as 7 | 9 | 11)}
@@ -111,6 +122,12 @@ export function V2TeamMatches({
             <option value={2}>1st half / 2nd half</option>
             <option value={3}>Three periods</option>
           </select>
+          <Input
+            inputMode="numeric"
+            onChange={(event) => setPeriodLengthMinutes(Number(event.target.value) || 0)}
+            placeholder="Minutes / period"
+            value={periodLengthMinutes}
+          />
         </div>
 
         {createMode === "copy" ? (
@@ -121,15 +138,18 @@ export function V2TeamMatches({
               setSourceMatchId(nextSourceMatchId);
               const sourceMatch = matches.find((match) => match.id === nextSourceMatchId);
               if (!sourceMatch) return;
+              setHomeTeam(sourceMatch.homeTeam);
+              setAwayTeam(sourceMatch.awayTeam);
               setFormat(sourceMatch.format);
               setPeriodCount(sourceMatch.periodCount);
+              setPeriodLengthMinutes(sourceMatch.periodLengthMinutes);
             }}
             value={sourceMatchId}
           >
             <option value="">Choose a match to copy</option>
             {matches.map((match) => (
               <option key={match.id} value={match.id}>
-                {match.opponent} ({new Date(match.matchDate).toLocaleDateString("sv-SE")})
+                {match.homeTeam} vs {match.awayTeam} ({new Date(match.matchDate).toLocaleDateString("sv-SE")})
               </option>
             ))}
           </select>
@@ -154,11 +174,14 @@ export function V2TeamMatches({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-emerald-700">{match.format}-a-side</p>
-                  <h3 className="mt-1 text-lg font-semibold">{match.opponent}</h3>
+                  <h3 className="mt-1 text-lg font-semibold">
+                    {match.homeTeam} vs {match.awayTeam}
+                  </h3>
                   <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
                     <CalendarDays className="h-4 w-4" />
                     {new Date(match.matchDate).toLocaleDateString("sv-SE")}
                   </p>
+                  <p className="mt-1 text-sm text-muted-foreground">{match.periodCount} periods • {match.periodLengthMinutes} min</p>
                 </div>
                 <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
                   {match.periodCount === 2 ? "2 periods" : "3 periods"}
