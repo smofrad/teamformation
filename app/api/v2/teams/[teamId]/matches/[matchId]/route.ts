@@ -78,6 +78,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ teamI
     .update({
       ...(isInfoUpdate
         ? {
+            opponent: awayTeam,
             home_team: homeTeam,
             away_team: awayTeam,
             match_date: matchDate,

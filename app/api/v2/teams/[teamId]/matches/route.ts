@@ -47,6 +47,7 @@ export async function POST(request: Request, context: { params: Promise<{ teamId
     .from("matches")
     .insert({
       team_id: teamId,
+      opponent: awayTeam,
       home_team: homeTeam,
       away_team: awayTeam,
       match_date: matchDate,
