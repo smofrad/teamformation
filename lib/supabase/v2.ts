@@ -58,6 +58,16 @@ export type V2MatchGoal = {
   minute: number;
 };
 
+export type V2MatchSubstitution = {
+  id: string;
+  periodNumber: number;
+  minute: number;
+  playerOutId: string;
+  playerInId: string;
+  note: string | null;
+  createdAt: string;
+};
+
 export type V2MatchDetail = {
   id: string;
   teamId: string;
@@ -75,6 +85,7 @@ export type V2MatchDetail = {
   players: V2Player[];
   periods: V2MatchPeriod[];
   goals: V2MatchGoal[];
+  substitutions: V2MatchSubstitution[];
 };
 
 export async function getV2TeamsForCurrentUser(): Promise<V2TeamSummary[]> {
@@ -186,7 +197,7 @@ export async function getV2TeamDetail(teamId: string): Promise<V2TeamDetail | nu
 export async function getV2MatchDetail(teamId: string, matchId: string): Promise<V2MatchDetail | null> {
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: team, error: teamError }, { data: match, error: matchError }, { data: goals, error: goalsError }] =
+  const [{ data: team, error: teamError }, { data: match, error: matchError }, { data: goals, error: goalsError }, { data: substitutions, error: substitutionsError }] =
     await Promise.all([
       supabase
         .from("teams")
@@ -253,15 +264,32 @@ export async function getV2MatchDetail(teamId: string, matchId: string): Promise
         .eq("match_id", matchId)
         .eq("team_id", teamId)
         .order("minute", { ascending: true }),
+      supabase
+        .from("match_substitutions")
+        .select(
+          `
+            id,
+            period_number,
+            minute,
+            player_out_id,
+            player_in_id,
+            note,
+            created_at
+          `
+        )
+        .eq("match_id", matchId)
+        .eq("team_id", teamId)
+        .order("period_number", { ascending: true })
+        .order("minute", { ascending: true }),
     ]);
 
-  if (teamError || matchError || goalsError) {
-    const code = teamError?.code ?? matchError?.code ?? goalsError?.code;
+  if (teamError || matchError || goalsError || substitutionsError) {
+    const code = teamError?.code ?? matchError?.code ?? goalsError?.code ?? substitutionsError?.code;
     if (code === "PGRST116") {
       return null;
     }
 
-    throw new Error(teamError?.message ?? matchError?.message ?? goalsError?.message ?? "Unable to load match.");
+    throw new Error(teamError?.message ?? matchError?.message ?? goalsError?.message ?? substitutionsError?.message ?? "Unable to load match.");
   }
 
   if (!team || !match) {
@@ -311,6 +339,15 @@ export async function getV2MatchDetail(teamId: string, matchId: string): Promise
       teamSide: goal.team_side,
       scorerName: goal.scorer_name,
       minute: goal.minute,
+    })),
+    substitutions: (substitutions ?? []).map((substitution) => ({
+      id: substitution.id,
+      periodNumber: substitution.period_number,
+      minute: substitution.minute,
+      playerOutId: substitution.player_out_id,
+      playerInId: substitution.player_in_id,
+      note: substitution.note,
+      createdAt: substitution.created_at,
     })),
   };
 }

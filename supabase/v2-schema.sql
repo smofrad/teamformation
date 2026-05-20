@@ -76,6 +76,20 @@ create table if not exists public.match_goals (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.match_substitutions (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references public.matches(id) on delete cascade,
+  team_id uuid not null references public.teams(id) on delete cascade,
+  period_number smallint not null check (period_number between 1 and 3),
+  minute smallint not null check (minute >= 0 and minute <= 200),
+  player_out_id uuid not null references public.players(id) on delete cascade,
+  player_in_id uuid not null references public.players(id) on delete cascade,
+  note text,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.match_periods (
   id uuid primary key default gen_random_uuid(),
   match_id uuid not null references public.matches(id) on delete cascade,
@@ -162,6 +176,7 @@ alter table public.match_periods enable row level security;
 alter table public.period_players enable row level security;
 alter table public.match_history enable row level security;
 alter table public.match_goals enable row level security;
+alter table public.match_substitutions enable row level security;
 
 create policy "profiles readable by authenticated users"
 on public.profiles for select
@@ -272,4 +287,14 @@ using (
 )
 with check (
   public.is_team_member(match_goals.team_id)
+);
+
+create policy "match_substitutions manageable by team members"
+on public.match_substitutions for all
+to authenticated
+using (
+  public.is_team_member(match_substitutions.team_id)
+)
+with check (
+  public.is_team_member(match_substitutions.team_id)
 );

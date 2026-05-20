@@ -90,7 +90,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const [localPeriods, setLocalPeriods] = useState(match.periods);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [presentationMode, setPresentationMode] = useState(initialPresentationMode);
-  const [activeTab, setActiveTab] = useState<"formation" | "info" | "events">("formation");
+  const [activeTab, setActiveTab] = useState<"formation" | "info" | "events" | "subs">("formation");
   const [showMatchInfo, setShowMatchInfo] = useState(false);
   const [showSquadSheet, setShowSquadSheet] = useState(false);
   const [homeTeam, setHomeTeam] = useState(match.homeTeam);
@@ -103,6 +103,12 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const [goalTeamSide, setGoalTeamSide] = useState<"home" | "away">("home");
   const [goalScorerName, setGoalScorerName] = useState("");
   const [goalMinute, setGoalMinute] = useState("");
+  const [subPeriodNumber, setSubPeriodNumber] = useState<1 | 2 | 3>(1);
+  const [subMinute, setSubMinute] = useState("");
+  const [subPlayerOutId, setSubPlayerOutId] = useState("");
+  const [subPlayerInId, setSubPlayerInId] = useState("");
+  const [subNote, setSubNote] = useState("");
+  const [editingSubstitutionId, setEditingSubstitutionId] = useState<string | null>(null);
   const [manualHomeScore, setManualHomeScore] = useState(match.manualHomeScore?.toString() ?? "");
   const [manualAwayScore, setManualAwayScore] = useState(match.manualAwayScore?.toString() ?? "");
   const [error, setError] = useState("");
@@ -126,6 +132,12 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
     setPeriodLengthMinutes(match.periodLengthMinutes);
     setManualHomeScore(match.manualHomeScore?.toString() ?? "");
     setManualAwayScore(match.manualAwayScore?.toString() ?? "");
+    setSubPeriodNumber(Math.min(match.periodCount, 1) as 1 | 2 | 3);
+    setEditingSubstitutionId(null);
+    setSubMinute("");
+    setSubPlayerOutId("");
+    setSubPlayerInId("");
+    setSubNote("");
   }, [match.activePeriodNumber, match.id, match.periods]);
 
   const activePeriod = useMemo(
@@ -167,6 +179,26 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
     () => match.players.map((player) => ({ id: player.id, label: `#${player.shirtNumber} ${player.name}`, name: player.name })),
     [match.players]
   );
+  const substitutionPeriod = useMemo(
+    () => getEffectivePeriod(localPeriods, subPeriodNumber),
+    [localPeriods, subPeriodNumber]
+  );
+  const substitutionOutOptions = useMemo(() => {
+    if (!substitutionPeriod) return [];
+    return substitutionPeriod.players
+      .filter((item) => item.zone === "pitch")
+      .map((item) => playersById.get(item.playerId))
+      .filter((item): item is V2Player => Boolean(item))
+      .sort((a, b) => Number(a.shirtNumber) - Number(b.shirtNumber) || a.name.localeCompare(b.name));
+  }, [playersById, substitutionPeriod]);
+  const substitutionInOptions = useMemo(() => {
+    if (!substitutionPeriod) return [];
+    return substitutionPeriod.players
+      .filter((item) => item.zone === "bench")
+      .map((item) => playersById.get(item.playerId))
+      .filter((item): item is V2Player => Boolean(item))
+      .sort((a, b) => Number(a.shirtNumber) - Number(b.shirtNumber) || a.name.localeCompare(b.name));
+  }, [playersById, substitutionPeriod]);
 
   function updateLocalPeriod(periodNumber: number, updater: (period: EffectivePeriod) => EffectivePeriod) {
     setLocalPeriods((currentPeriods) => {
@@ -341,6 +373,79 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
     });
   }
 
+  function resetSubstitutionForm() {
+    setEditingSubstitutionId(null);
+    setSubMinute("");
+    setSubPlayerOutId("");
+    setSubPlayerInId("");
+    setSubNote("");
+  }
+
+  async function saveSubstitution() {
+    setError("");
+    const isEditing = Boolean(editingSubstitutionId);
+    const response = await fetch(
+      isEditing
+        ? `/api/v2/teams/${match.teamId}/matches/${match.id}/substitutions/${editingSubstitutionId}`
+        : `/api/v2/teams/${match.teamId}/matches/${match.id}/substitutions`,
+      {
+        method: isEditing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          periodNumber: subPeriodNumber,
+          minute: Number(subMinute),
+          playerOutId: subPlayerOutId,
+          playerInId: subPlayerInId,
+          note: subNote,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      setError(data?.error ?? "Unable to save substitution.");
+      return;
+    }
+
+    resetSubstitutionForm();
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
+  async function deleteSubstitution(substitutionId: string) {
+    setError("");
+    const response = await fetch(
+      `/api/v2/teams/${match.teamId}/matches/${match.id}/substitutions/${substitutionId}`,
+      { method: "DELETE" }
+    );
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      setError(data?.error ?? "Unable to delete substitution.");
+      return;
+    }
+
+    if (editingSubstitutionId === substitutionId) {
+      resetSubstitutionForm();
+    }
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
+  function startEditingSubstitution(substitutionId: string) {
+    const substitution = match.substitutions.find((item) => item.id === substitutionId);
+    if (!substitution) return;
+    setEditingSubstitutionId(substitution.id);
+    setSubPeriodNumber(substitution.periodNumber as 1 | 2 | 3);
+    setSubMinute(String(substitution.minute));
+    setSubPlayerOutId(substitution.playerOutId);
+    setSubPlayerInId(substitution.playerInId);
+    setSubNote(substitution.note ?? "");
+    setActiveTab("subs");
+  }
+
   function handleDragStart(event: DragStartEvent) {
     if (presentationMode) return;
     setActiveDragId(String(event.active.id));
@@ -454,11 +559,12 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
           </div>
         ) : null}
 
-        <div className="mt-2 grid grid-cols-3 gap-2 rounded-2xl border border-border bg-white/90 p-1">
+        <div className="mt-2 grid grid-cols-4 gap-2 rounded-2xl border border-border bg-white/90 p-1">
           {[
             ["formation", "Formation"],
             ["info", "Info"],
             ["events", "Events"],
+            ["subs", "Subs"],
           ].map(([tabKey, label]) => (
             <button
               className={cn(
@@ -466,7 +572,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
                 activeTab === tabKey ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-secondary"
               )}
               key={tabKey}
-              onClick={() => setActiveTab(tabKey as "formation" | "info" | "events")}
+              onClick={() => setActiveTab(tabKey as "formation" | "info" | "events" | "subs")}
               type="button"
             >
               {label}
@@ -669,6 +775,122 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
                       </span>
                     </div>
                   ))
+                )}
+              </div>
+            </section>
+          ) : null}
+
+          {activeTab === "subs" ? (
+            <section className="rounded-[24px] border border-border bg-white/85 p-4">
+              <div>
+                <h2 className="font-semibold text-slate-900">Planned substitutions</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Plan who goes out and who comes in for each period.
+                </p>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-border bg-white/80 p-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <select
+                    className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
+                    onChange={(event) => {
+                      setSubPeriodNumber(Number(event.target.value) as 1 | 2 | 3);
+                      setSubPlayerOutId("");
+                      setSubPlayerInId("");
+                    }}
+                    value={subPeriodNumber}
+                  >
+                    {Array.from({ length: match.periodCount }, (_, index) => index + 1).map((period) => (
+                      <option key={period} value={period}>
+                        Period {period}
+                      </option>
+                    ))}
+                  </select>
+                  <Input inputMode="numeric" onChange={(event) => setSubMinute(event.target.value)} placeholder="Minute" value={subMinute} />
+                  <select
+                    className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
+                    onChange={(event) => setSubPlayerOutId(event.target.value)}
+                    value={subPlayerOutId}
+                  >
+                    <option value="">Player out</option>
+                    {substitutionOutOptions.map((player) => (
+                      <option key={player.id} value={player.id}>
+                        #{player.shirtNumber} {player.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
+                    onChange={(event) => setSubPlayerInId(event.target.value)}
+                    value={subPlayerInId}
+                  >
+                    <option value="">Player in</option>
+                    {substitutionInOptions.map((player) => (
+                      <option key={player.id} value={player.id}>
+                        #{player.shirtNumber} {player.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-3">
+                  <Input onChange={(event) => setSubNote(event.target.value)} placeholder="Optional note" value={subNote} />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    disabled={isPending || !subMinute || !subPlayerOutId || !subPlayerInId}
+                    onClick={saveSubstitution}
+                    type="button"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {editingSubstitutionId ? "Save changes" : "Add substitution"}
+                  </Button>
+                  {editingSubstitutionId ? (
+                    <Button onClick={resetSubstitutionForm} type="button" variant="outline">
+                      Cancel
+                    </Button>
+                  ) : null}
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Player out is chosen from the pitch and player in from the bench for the selected period.
+                </p>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {match.substitutions.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border bg-white/70 p-4 text-sm text-muted-foreground">
+                    No planned substitutions yet.
+                  </div>
+                ) : (
+                  match.substitutions.map((substitution) => {
+                    const playerOut = playersById.get(substitution.playerOutId);
+                    const playerIn = playersById.get(substitution.playerInId);
+                    return (
+                      <div className="rounded-2xl border border-border bg-white/80 px-4 py-3" key={substitution.id}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-900">
+                              Period {substitution.periodNumber} • {substitution.minute}'
+                            </p>
+                            <p className="mt-1 text-sm text-slate-700">
+                              {playerOut ? `#${playerOut.shirtNumber} ${playerOut.name}` : "Unknown player"} {" -> "} 
+                              {playerIn ? `#${playerIn.shirtNumber} ${playerIn.name}` : "Unknown player"}
+                            </p>
+                            {substitution.note ? (
+                              <p className="mt-1 text-xs text-muted-foreground">{substitution.note}</p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            <Button onClick={() => startEditingSubstitution(substitution.id)} size="sm" type="button" variant="outline">
+                              Edit
+                            </Button>
+                            <Button onClick={() => deleteSubstitution(substitution.id)} size="sm" type="button" variant="outline">
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </section>
