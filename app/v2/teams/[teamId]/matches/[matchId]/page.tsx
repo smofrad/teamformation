@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Shield } from "lucide-react";
 
 import { V2MatchEditor } from "@/components/v2-match-editor";
 import { Button } from "@/components/ui/button";
-import { requireSupabaseUser } from "@/lib/supabase/auth";
+import { getSupabaseProfile, requireSupabaseUser } from "@/lib/supabase/auth";
 import { getV2MatchDetail } from "@/lib/supabase/v2";
 
 export default async function V2MatchPage({
@@ -15,6 +15,7 @@ export default async function V2MatchPage({
   searchParams: Promise<{ view?: string }>;
 }) {
   await requireSupabaseUser();
+  const profile = await getSupabaseProfile();
   const { teamId, matchId } = await params;
   const { view } = await searchParams;
   const match = await getV2MatchDetail(teamId, matchId);
@@ -27,12 +28,22 @@ export default async function V2MatchPage({
     <main className="h-[100dvh] overflow-hidden px-2 py-2 sm:px-3 sm:py-3">
       <div className="mx-auto flex h-full max-w-5xl flex-col gap-2">
         <div className="flex items-center justify-between">
-          <Button asChild size="sm" variant="outline">
-            <Link href={`/v2/teams/${teamId}`}>
-              <ArrowLeft className="h-4 w-4" />
-              Back to team
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/v2/teams/${teamId}`}>
+                <ArrowLeft className="h-4 w-4" />
+                Back to team
+              </Link>
+            </Button>
+            {profile.is_admin ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href="/v2/admin/users">
+                  <Shield className="h-4 w-4" />
+                  Admin
+                </Link>
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         <V2MatchEditor initialPresentationMode={view === "presentation"} match={match} />

@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Settings2 } from "lucide-react";
+import { ArrowLeft, Settings2, Shield } from "lucide-react";
 
 import { V2TeamMatches } from "@/components/v2-team-matches";
 import { Button } from "@/components/ui/button";
-import { requireSupabaseUser } from "@/lib/supabase/auth";
+import { getSupabaseProfile, requireSupabaseUser } from "@/lib/supabase/auth";
 import { getV2TeamDetail } from "@/lib/supabase/v2";
 
 export default async function V2TeamPage({ params }: { params: Promise<{ teamId: string }> }) {
   await requireSupabaseUser();
+  const profile = await getSupabaseProfile();
   const { teamId } = await params;
   const team = await getV2TeamDetail(teamId);
 
@@ -43,6 +44,14 @@ export default async function V2TeamPage({ params }: { params: Promise<{ teamId:
                   Manage squad
                 </Link>
               </Button>
+              {profile.is_admin ? (
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/v2/admin/users">
+                    <Shield className="h-4 w-4" />
+                    Admin
+                  </Link>
+                </Button>
+              ) : null}
             </div>
           </div>
 
