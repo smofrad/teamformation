@@ -20,3 +20,29 @@ export async function requireSupabaseUser() {
 
   return user;
 }
+
+export async function getSupabaseProfile() {
+  const user = await requireSupabaseUser();
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, email, display_name, is_admin")
+    .eq("id", user.id)
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Unable to load profile.");
+  }
+
+  return data;
+}
+
+export async function requireSupabaseAdmin() {
+  const profile = await getSupabaseProfile();
+
+  if (!profile.is_admin) {
+    redirect("/v2");
+  }
+
+  return profile;
+}

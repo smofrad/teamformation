@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Database, Users } from "lucide-react";
+import { Database, Shield, Users } from "lucide-react";
 
-import { requireSupabaseUser } from "@/lib/supabase/auth";
+import { getSupabaseProfile, requireSupabaseUser } from "@/lib/supabase/auth";
 import { getV2TeamsForCurrentUser } from "@/lib/supabase/v2";
 
 export default async function V2HomePage() {
   const user = await requireSupabaseUser();
+  const profile = await getSupabaseProfile();
   const teams = await getV2TeamsForCurrentUser();
 
   if (teams.length === 1) {
@@ -27,6 +28,17 @@ export default async function V2HomePage() {
           <p className="mt-3 text-sm text-muted-foreground">
             Signed in as <strong>{user.email}</strong>. Choose a team and go straight into building formations.
           </p>
+          {profile.is_admin ? (
+            <div className="mt-4">
+              <Link
+                className="inline-flex items-center rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-secondary"
+                href="/v2/admin/users"
+              >
+                <Shield className="mr-2 h-4 w-4" />
+                Admin users
+              </Link>
+            </div>
+          ) : null}
         </section>
 
         <section className="surface p-6">

@@ -5,9 +5,12 @@ create table if not exists public.profiles (
   email text not null unique,
   display_name text,
   username text unique,
+  is_admin boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profiles add column if not exists is_admin boolean not null default false;
 
 create table if not exists public.teams (
   id uuid primary key default gen_random_uuid(),
