@@ -516,7 +516,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
-      <section className="surface flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-3">
+      <section className="surface flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden p-2 sm:overflow-hidden sm:p-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.28em] text-emerald-700">{match.teamName}</p>
@@ -559,7 +559,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
           </div>
         ) : null}
 
-        <div className="mt-2 grid grid-cols-4 gap-2 rounded-2xl border border-border bg-white/90 p-1">
+        <div className="mt-2 grid grid-cols-4 gap-1 rounded-2xl border border-border bg-white/90 p-1 sm:gap-2">
           {[
             ["formation", "Formation"],
             ["info", "Info"],
@@ -568,7 +568,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
           ].map(([tabKey, label]) => (
             <button
               className={cn(
-                "rounded-xl px-3 py-2 text-sm font-medium transition",
+                "rounded-xl px-2 py-2 text-xs font-medium transition sm:px-3 sm:text-sm",
                 activeTab === tabKey ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-secondary"
               )}
               key={tabKey}
@@ -607,7 +607,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
 
         {error ? <div className="mt-2 rounded-2xl border px-4 py-3 text-sm status-error">{error}</div> : null}
 
-        <div className="mt-2 flex min-h-0 flex-1 flex-col gap-2">
+        <div className="mt-2 flex min-h-0 flex-1 flex-col gap-2 pb-3 sm:pb-0">
           {activeTab === "formation" ? (
             <>
               <PitchZone
@@ -986,7 +986,7 @@ function PitchZone({
   return (
     <div
       className={cn(
-        "pitch relative min-h-[420px] flex-1 overflow-hidden rounded-[30px] border-4 border-white/70 shadow-soft sm:min-h-[520px]",
+        "pitch relative min-h-[300px] flex-1 overflow-hidden rounded-[30px] border-4 border-white/70 shadow-soft sm:min-h-[520px]",
         pitchDrop.isOver && "ring-4 ring-emerald-200"
       )}
       ref={(node) => {

@@ -20,18 +20,18 @@ export default async function V2HomePage() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-6 sm:px-6">
+    <main className="min-h-screen overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
       <div className="mx-auto max-w-4xl space-y-4">
         <section className="surface p-6">
           <p className="text-xs uppercase tracking-[0.3em] text-emerald-700">Team Formation</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Your shared team workspace</h1>
-          <p className="mt-3 text-sm text-muted-foreground">
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Your shared team workspace</h1>
+          <p className="mt-3 break-words text-sm text-muted-foreground">
             Signed in as <strong>{user.email}</strong>. Choose a team and go straight into building formations.
           </p>
           {profile.is_admin ? (
             <div className="mt-4">
               <Link
-                className="inline-flex items-center rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-secondary"
+                className="inline-flex max-w-full items-center rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-secondary"
                 href="/v2/admin/users"
               >
                 <Shield className="mr-2 h-4 w-4" />
@@ -52,9 +52,9 @@ export default async function V2HomePage() {
           ) : (
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {teams.map((team) => (
-                <article className="rounded-[28px] border border-border bg-white/75 p-5" key={team.id}>
+                <article className="min-w-0 rounded-[28px] border border-border bg-white/75 p-5" key={team.id}>
                   <p className="text-xs uppercase tracking-[0.25em] text-emerald-700">Team</p>
-                  <h3 className="mt-2 text-xl font-semibold">{team.name}</h3>
+                  <h3 className="mt-2 break-words text-xl font-semibold">{team.name}</h3>
                   <div className="mt-4 grid grid-cols-2 gap-3">
                     <div className="rounded-2xl bg-emerald-50 p-3">
                       <p className="text-xs uppercase tracking-[0.2em] text-emerald-700">Players</p>
@@ -73,7 +73,7 @@ export default async function V2HomePage() {
                   </div>
                   <div className="mt-4">
                     <Link
-                      className="inline-flex rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-secondary"
+                      className="inline-flex max-w-full rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-secondary"
                       href={team.latestMatchId ? `/v2/teams/${team.id}/matches/${team.latestMatchId}` : `/v2/teams/${team.id}`}
                     >
                       {team.latestMatchId ? "Open latest match" : "Create formation"}
