@@ -23,29 +23,29 @@ export default async function V2TeamPage({ params }: { params: Promise<{ teamId:
     <main className="min-h-screen px-3 py-3 sm:px-4 sm:py-4">
       <div className="mx-auto max-w-4xl space-y-3">
         <section className="surface p-4 sm:p-6">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <p className="text-xs uppercase tracking-[0.3em] text-emerald-700">Formation hub</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{team.name}</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                 Go straight into match planning here. Squad management lives in a separate view so coaches can build lineups faster.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button asChild size="sm" variant="outline">
+            <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center">
+              <Button asChild className="justify-center sm:justify-start" size="sm" variant="outline">
                 <Link href="/v2">
                   <ArrowLeft className="h-4 w-4" />
                   Teams
                 </Link>
               </Button>
-              <Button asChild size="sm" variant="outline">
+              <Button asChild className="justify-center sm:justify-start" size="sm" variant="outline">
                 <Link href={`/v2/teams/${team.id}/players`}>
                   <Settings2 className="h-4 w-4" />
                   Manage squad
                 </Link>
               </Button>
               {profile.is_admin ? (
-                <Button asChild size="sm" variant="outline">
+                <Button asChild className="justify-center sm:justify-start" size="sm" variant="outline">
                   <Link href="/v2/admin/users">
                     <Shield className="h-4 w-4" />
                     Admin

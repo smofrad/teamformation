@@ -92,6 +92,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
   const [presentationMode, setPresentationMode] = useState(initialPresentationMode);
   const [activeTab, setActiveTab] = useState<"formation" | "info" | "events" | "subs">("formation");
   const [showMatchInfo, setShowMatchInfo] = useState(false);
+  const [showBenchSheet, setShowBenchSheet] = useState(false);
   const [showSquadSheet, setShowSquadSheet] = useState(false);
   const [homeTeam, setHomeTeam] = useState(match.homeTeam);
   const [awayTeam, setAwayTeam] = useState(match.awayTeam);
@@ -516,7 +517,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
-      <section className="surface flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden p-2 sm:overflow-hidden sm:p-3">
+      <section className="surface flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden p-2 pb-20 sm:overflow-hidden sm:p-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.28em] text-emerald-700">{match.teamName}</p>
@@ -559,7 +560,20 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
           </div>
         ) : null}
 
-        <div className="mt-2 grid grid-cols-4 gap-1 rounded-2xl border border-border bg-white/90 p-1 sm:gap-2">
+        <div className="mt-2 sm:hidden">
+          <select
+            className="w-full rounded-2xl border border-border bg-white/90 px-4 py-3 text-sm font-medium outline-none transition focus:border-emerald-500"
+            onChange={(event) => setActiveTab(event.target.value as "formation" | "info" | "events" | "subs")}
+            value={activeTab}
+          >
+            <option value="formation">Formation</option>
+            <option value="info">Info</option>
+            <option value="events">Events</option>
+            <option value="subs">Subs</option>
+          </select>
+        </div>
+
+        <div className="mt-2 hidden grid-cols-4 gap-2 rounded-2xl border border-border bg-white/90 p-1 sm:grid">
           {[
             ["formation", "Formation"],
             ["info", "Info"],
@@ -593,12 +607,13 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
                 onClick={() => updateActivePeriodOnServer(period.periodNumber)}
                 type="button"
               >
-                {period.label}
+                <span className="sm:hidden">P{period.periodNumber}</span>
+                <span className="hidden sm:inline">{period.label}</span>
               </button>
             ))}
           </div>
 
-          <Button className="shrink-0" onClick={() => setPresentationMode((current) => !current)} size="sm" variant={presentationMode ? "default" : "outline"}>
+          <Button className="shrink-0 px-3 sm:px-4" onClick={() => setPresentationMode((current) => !current)} size="sm" variant={presentationMode ? "default" : "outline"}>
             {presentationMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             <span className="hidden sm:inline">{presentationMode ? "Exit presentation" : "Presentation"}</span>
           </Button>
@@ -618,13 +633,45 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
               />
 
               {!presentationMode ? (
-                <BenchZone
-                  availablePlayersCount={availablePlayers.length}
-                  benchPlayers={benchPlayers}
-                  benchRef={benchRef}
-                  moveBenchPlayerToPitch={moveBenchPlayerToPitch}
-                  onAddPlayers={() => setShowSquadSheet(true)}
-                />
+                <>
+                  <div className="hidden sm:block">
+                    <BenchZone
+                      availablePlayersCount={availablePlayers.length}
+                      benchPlayers={benchPlayers}
+                      benchRef={benchRef}
+                      moveBenchPlayerToPitch={moveBenchPlayerToPitch}
+                      onAddPlayers={() => setShowSquadSheet(true)}
+                    />
+                  </div>
+
+                  <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-[rgba(250,248,242,0.96)] px-3 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] sm:hidden">
+                    <div className="mx-auto flex max-w-5xl items-center gap-2">
+                      <button
+                        className="flex min-w-0 flex-1 items-center justify-between rounded-2xl border border-border bg-white px-4 py-3 text-left"
+                        onClick={() => setShowBenchSheet(true)}
+                        type="button"
+                      >
+                        <span>
+                          <span className="block text-sm font-semibold text-slate-900">Bench</span>
+                          <span className="block text-xs text-muted-foreground">{benchPlayers.length} players</span>
+                        </span>
+                        <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{benchPlayers.length}</span>
+                      </button>
+                      <Button
+                        className="shrink-0"
+                        onClick={() => {
+                          setShowBenchSheet(false);
+                          setShowSquadSheet(true);
+                        }}
+                        size="sm"
+                        type="button"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                </>
               ) : null}
             </>
           ) : null}
@@ -901,7 +948,42 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
         {!presentationMode && activeTab === "formation" ? (
           <div
             className={cn(
-              "fixed inset-x-0 bottom-0 z-50",
+              "fixed inset-x-0 bottom-0 z-50 sm:hidden",
+              showBenchSheet ? "pointer-events-auto" : "pointer-events-none"
+            )}
+          >
+            <div
+              className={cn(
+                "absolute inset-0 bg-slate-950/25 transition-opacity",
+                showBenchSheet ? "opacity-100" : "opacity-0"
+              )}
+              onClick={() => setShowBenchSheet(false)}
+            />
+            <div
+              className={cn(
+                "relative ml-auto max-h-[58dvh] overflow-y-auto rounded-t-[28px] border-t border-border bg-[rgba(250,248,242,0.98)] px-3 pb-5 pt-3 shadow-[0_-24px_60px_rgba(15,23,42,0.18)] transition-transform",
+                showBenchSheet ? "translate-y-0" : "translate-y-full"
+              )}
+            >
+              <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-slate-300" />
+              <BenchZone
+                availablePlayersCount={availablePlayers.length}
+                benchPlayers={benchPlayers}
+                benchRef={benchRef}
+                moveBenchPlayerToPitch={moveBenchPlayerToPitch}
+                onAddPlayers={() => {
+                  setShowBenchSheet(false);
+                  setShowSquadSheet(true);
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {!presentationMode && activeTab === "formation" ? (
+          <div
+            className={cn(
+              "fixed inset-x-0 bottom-0 z-[60]",
               showSquadSheet ? "pointer-events-auto" : "pointer-events-none"
             )}
           >

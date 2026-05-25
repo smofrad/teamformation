@@ -29,17 +29,17 @@ export default async function V2MatchPage({
       <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-2 sm:h-full sm:min-h-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Button asChild size="sm" variant="outline">
+            <Button asChild className="px-3 sm:px-4" size="sm" variant="outline">
               <Link href={`/v2/teams/${teamId}`}>
                 <ArrowLeft className="h-4 w-4" />
-                Back to team
+                <span className="hidden sm:inline">Back to team</span>
               </Link>
             </Button>
             {profile.is_admin ? (
-              <Button asChild size="sm" variant="outline">
+              <Button asChild className="px-3 sm:px-4" size="sm" variant="outline">
                 <Link href="/v2/admin/users">
                   <Shield className="h-4 w-4" />
-                  Admin
+                  <span className="hidden sm:inline">Admin</span>
                 </Link>
               </Button>
             ) : null}
