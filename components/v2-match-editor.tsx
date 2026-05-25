@@ -648,7 +648,7 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
                     <div className="mx-auto flex max-w-5xl items-center gap-2">
                       <button
                         className="flex min-w-0 flex-1 items-center justify-between rounded-2xl border border-border bg-white px-4 py-3 text-left"
-                        onClick={() => setShowBenchSheet(true)}
+                        onClick={() => setShowBenchSheet((current) => !current)}
                         type="button"
                       >
                         <span>
@@ -966,6 +966,15 @@ export function V2MatchEditor({ match, initialPresentationMode = false }: { matc
               )}
             >
               <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-slate-300" />
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Bench</p>
+                  <p className="text-xs text-muted-foreground">Tap minimize when you want more pitch space.</p>
+                </div>
+                <Button onClick={() => setShowBenchSheet(false)} size="sm" type="button" variant="outline">
+                  Minimize
+                </Button>
+              </div>
               <BenchZone
                 availablePlayersCount={availablePlayers.length}
                 benchPlayers={benchPlayers}
