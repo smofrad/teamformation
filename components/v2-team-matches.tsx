@@ -6,6 +6,14 @@ import { useRouter } from "next/navigation";
 import { CalendarDays, ChevronRight, Copy, Eye, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { V2MatchSummary } from "@/lib/supabase/v2";
 
@@ -27,6 +35,7 @@ export function V2TeamMatches({
   const [periodCount, setPeriodCount] = useState<2 | 3>(2);
   const [periodLengthMinutes, setPeriodLengthMinutes] = useState(20);
   const [sourceMatchId, setSourceMatchId] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -65,6 +74,7 @@ export function V2TeamMatches({
     setPeriodLengthMinutes(20);
     setSourceMatchId("");
     setCreateMode("blank");
+    setCreateDialogOpen(false);
     startTransition(() => {
       if (data?.matchId) {
         router.push(`/v2/teams/${teamId}/matches/${data.matchId}`);
@@ -77,89 +87,111 @@ export function V2TeamMatches({
 
   return (
     <section className="surface p-6">
-      <h2 className="text-xl font-semibold">Matches</h2>
-      <p className="mt-2 text-sm text-muted-foreground">Create a blank match or copy a previous one with periods, players and positions intact.</p>
-
-      <form className="mt-4 grid gap-3" onSubmit={handleSubmit}>
-        <div className="flex overflow-hidden rounded-2xl border border-border bg-white">
-          <button
-            className={createMode === "blank" ? "bg-emerald-600 px-4 py-3 text-sm font-medium text-white" : "px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-secondary"}
-            onClick={() => setCreateMode("blank")}
-            type="button"
-          >
-            Blank match
-          </button>
-          <button
-            className={createMode === "copy" ? "bg-emerald-600 px-4 py-3 text-sm font-medium text-white" : "px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-secondary"}
-            onClick={() => setCreateMode("copy")}
-            type="button"
-          >
-            Copy previous
-          </button>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold">Matches</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Open a saved match or create a new one when you are ready.
+          </p>
         </div>
+        <Dialog onOpenChange={setCreateDialogOpen} open={createDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4" />
+              Create
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create match</DialogTitle>
+              <DialogDescription>
+                Start a blank match or copy a previous one with periods, players and positions intact.
+              </DialogDescription>
+            </DialogHeader>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Input onChange={(event) => setHomeTeam(event.target.value)} placeholder="Home team" value={homeTeam} />
-          <Input onChange={(event) => setAwayTeam(event.target.value)} placeholder="Away team" value={awayTeam} />
-        </div>
-        <Input onChange={(event) => setMatchDate(event.target.value)} type="date" value={matchDate} />
-        <div className="grid gap-3 sm:grid-cols-3">
-          <select
-            className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
-            onChange={(event) => setFormat(Number(event.target.value) as 7 | 9 | 11)}
-            value={format}
-          >
-            <option value={7}>7-a-side</option>
-            <option value={9}>9-a-side</option>
-            <option value={11}>11-a-side</option>
-          </select>
+            <form className="grid gap-3" onSubmit={handleSubmit}>
+              <div className="flex overflow-hidden rounded-2xl border border-border bg-white">
+                <button
+                  className={createMode === "blank" ? "bg-emerald-600 px-4 py-3 text-sm font-medium text-white" : "px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-secondary"}
+                  onClick={() => setCreateMode("blank")}
+                  type="button"
+                >
+                  Blank match
+                </button>
+                <button
+                  className={createMode === "copy" ? "bg-emerald-600 px-4 py-3 text-sm font-medium text-white" : "px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-secondary"}
+                  onClick={() => setCreateMode("copy")}
+                  type="button"
+                >
+                  Copy previous
+                </button>
+              </div>
 
-          <select
-            className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
-            onChange={(event) => setPeriodCount(Number(event.target.value) as 2 | 3)}
-            value={periodCount}
-          >
-            <option value={2}>1st half / 2nd half</option>
-            <option value={3}>Three periods</option>
-          </select>
-          <Input
-            inputMode="numeric"
-            onChange={(event) => setPeriodLengthMinutes(Number(event.target.value) || 0)}
-            placeholder="Minutes / period"
-            value={periodLengthMinutes}
-          />
-        </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input onChange={(event) => setHomeTeam(event.target.value)} placeholder="Home team" value={homeTeam} />
+                <Input onChange={(event) => setAwayTeam(event.target.value)} placeholder="Away team" value={awayTeam} />
+              </div>
+              <Input onChange={(event) => setMatchDate(event.target.value)} type="date" value={matchDate} />
+              <div className="grid gap-3 sm:grid-cols-3">
+                <select
+                  className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
+                  onChange={(event) => setFormat(Number(event.target.value) as 7 | 9 | 11)}
+                  value={format}
+                >
+                  <option value={7}>7-a-side</option>
+                  <option value={9}>9-a-side</option>
+                  <option value={11}>11-a-side</option>
+                </select>
 
-        {createMode === "copy" ? (
-          <select
-            className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
-            onChange={(event) => {
-              const nextSourceMatchId = event.target.value;
-              setSourceMatchId(nextSourceMatchId);
-              const sourceMatch = matches.find((match) => match.id === nextSourceMatchId);
-              if (!sourceMatch) return;
-              setHomeTeam(sourceMatch.homeTeam);
-              setAwayTeam(sourceMatch.awayTeam);
-              setFormat(sourceMatch.format);
-              setPeriodCount(sourceMatch.periodCount);
-              setPeriodLengthMinutes(sourceMatch.periodLengthMinutes);
-            }}
-            value={sourceMatchId}
-          >
-            <option value="">Choose a match to copy</option>
-            {matches.map((match) => (
-              <option key={match.id} value={match.id}>
-                {match.homeTeam} vs {match.awayTeam} ({new Date(match.matchDate).toLocaleDateString("sv-SE")})
-              </option>
-            ))}
-          </select>
-        ) : null}
+                <select
+                  className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
+                  onChange={(event) => setPeriodCount(Number(event.target.value) as 2 | 3)}
+                  value={periodCount}
+                >
+                  <option value={2}>1st half / 2nd half</option>
+                  <option value={3}>Three periods</option>
+                </select>
+                <Input
+                  inputMode="numeric"
+                  onChange={(event) => setPeriodLengthMinutes(Number(event.target.value) || 0)}
+                  placeholder="Minutes / period"
+                  value={periodLengthMinutes}
+                />
+              </div>
 
-        <Button disabled={isPending || (createMode === "copy" && !sourceMatchId)} type="submit">
-          {createMode === "copy" ? <Copy className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {createMode === "copy" ? "Copy match" : "Create match"}
-        </Button>
-      </form>
+              {createMode === "copy" ? (
+                <select
+                  className="rounded-2xl border border-border bg-white px-4 py-3 outline-none transition focus:border-emerald-500"
+                  onChange={(event) => {
+                    const nextSourceMatchId = event.target.value;
+                    setSourceMatchId(nextSourceMatchId);
+                    const sourceMatch = matches.find((match) => match.id === nextSourceMatchId);
+                    if (!sourceMatch) return;
+                    setHomeTeam(sourceMatch.homeTeam);
+                    setAwayTeam(sourceMatch.awayTeam);
+                    setFormat(sourceMatch.format);
+                    setPeriodCount(sourceMatch.periodCount);
+                    setPeriodLengthMinutes(sourceMatch.periodLengthMinutes);
+                  }}
+                  value={sourceMatchId}
+                >
+                  <option value="">Choose a match to copy</option>
+                  {matches.map((match) => (
+                    <option key={match.id} value={match.id}>
+                      {match.homeTeam} vs {match.awayTeam} ({new Date(match.matchDate).toLocaleDateString("sv-SE")})
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+
+              <Button disabled={isPending || (createMode === "copy" && !sourceMatchId)} type="submit">
+                {createMode === "copy" ? <Copy className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {createMode === "copy" ? "Copy match" : "Create match"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
 
       {error ? <div className="mt-3 rounded-2xl border px-4 py-3 text-sm status-error">{error}</div> : null}
 
